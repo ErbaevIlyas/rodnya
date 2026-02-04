@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Родня - Социальная сеть</title>
+    <link rel="stylesheet" href="style.css?v=2.0">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#4facfe">
+    <link rel="apple-touch-icon" href="icon-192.png">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='75' font-size='75'>👥</text></svg>">
+</head>
+<body>
+    <!-- Модальное окно авторизации -->
+    <div class="auth-modal" id="auth-modal">
+        <div class="auth-container">
+            <div class="auth-header">
+                <i class="fas fa-users"></i>
+                <h1>Родня</h1>
+            </div>
+            
+            <!-- Форма входа -->
+            <div class="auth-form" id="login-form">
+                <h2>Вход</h2>
+                <input type="text" id="login-username" placeholder="Имя пользователя" maxlength="20">
+                <input type="password" id="login-password" placeholder="Пароль" maxlength="20">
+                <button class="auth-btn" id="login-btn">Войти</button>
+                <p class="auth-toggle">Нет аккаунта? <a href="#" onclick="toggleAuthForm()">Зарегистрироваться</a></p>
+            </div>
+            
+            <!-- Форма регистрации -->
+            <div class="auth-form" id="register-form" style="display: none;">
+                <h2>Регистрация</h2>
+                <input type="text" id="register-username" placeholder="Имя пользователя" maxlength="20">
+                <input type="password" id="register-password" placeholder="Пароль" maxlength="20">
+                <input type="password" id="register-password-confirm" placeholder="Подтвердите пароль" maxlength="20">
+                <button class="auth-btn" id="register-btn">Зарегистрироваться</button>
+                <p class="auth-toggle">Уже есть аккаунт? <a href="#" onclick="toggleAuthForm()">Войти</a></p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Главное приложение -->
+    <div class="container" id="main-container" style="display: none;">
+        <header class="header">
+            <div class="logo">
+                <i class="fas fa-users"></i>
+                <h1>Родня</h1>
+            </div>
+            <div class="user-info">
+                <span class="current-user" id="current-user"></span>
+                <span class="online-count">Онлайн: <span id="online-count">0</span></span>
+                <button class="logout-btn" id="logout-btn" title="Выход">
+                    <i class="fas fa-sign-out-alt"></i>
+                </button>
+            </div>
+        </header>
+
+        <main class="main-content">
+            <aside class="sidebar">
+                <div class="sidebar-header">
+                    <h3>Пользователи</h3>
+                </div>
+                <div class="users-list" id="users-list"></div>
+            </aside>
+
+            <div class="chat-container">
+                <div class="chat-header" id="chat-header">
+                    <h2>Общий чат</h2>
+                </div>
+
+                <div class="messages" id="messages">
+                    <div class="welcome-message">
+                        <i class="fas fa-heart"></i>
+                        <h2>Добро пожаловать в Родню!</h2>
+                        <p>Общайтесь с близкими, делитесь моментами жизни</p>
+                    </div>
+                </div>
+                
+                <div class="message-input-container">
+                    <div class="file-upload-area" id="file-upload-area">
+                        <i class="fas fa-cloud-upload-alt"></i>
+                        <span>Перетащите файлы сюда или нажмите для выбора</span>
+                        <input type="file" id="file-input" multiple accept="image/*,video/*,audio/*">
+                    </div>
+
+                    <div class="image-preview-modal" id="image-preview-modal">
+                        <div class="preview-content">
+                            <button class="close-preview" id="close-preview">&times;</button>
+                            <img id="preview-image" src="" alt="Preview">
+                            <div class="preview-controls">
+                                <input type="text" id="image-caption" placeholder="Добавить подпись..." maxlength="200">
+                                <button class="preview-btn cancel" id="cancel-preview">Отмена</button>
+                                <button class="preview-btn send" id="send-preview">Отправить</button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="input-area">
+                        <div class="input-controls">
+                            <button class="control-btn" id="attach-btn" title="Прикрепить файл">
+                                <i class="fas fa-paperclip"></i>
+                            </button>
+                            <button class="control-btn" id="emoji-btn" title="Эмодзи">
+                                <i class="fas fa-smile"></i>
+                            </button>
+                            <button class="control-btn" id="voice-btn" title="Голосовое сообщение">
+                                <i class="fas fa-microphone"></i>
+                            </button>
+                        </div>
+                        
+                        <input type="text" id="message-input" placeholder="Напишите сообщение..." maxlength="500">
+                        
+                        <button class="send-btn" id="send-btn">
+                            <i class="fas fa-paper-plane"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <div class="emoji-picker" id="emoji-picker">
+        <div class="emoji-grid">
+            <span class="emoji">😀</span><span class="emoji">😂</span><span class="emoji">😍</span><span class="emoji">🥰</span>
+            <span class="emoji">😊</span><span class="emoji">😎</span><span class="emoji">🤔</span><span class="emoji">😢</span>
+            <span class="emoji">😭</span><span class="emoji">😡</span><span class="emoji">👍</span><span class="emoji">👎</span>
+            <span class="emoji">❤️</span><span class="emoji">💕</span><span class="emoji">🔥</span><span class="emoji">✨</span>
+            <span class="emoji">🎉</span><span class="emoji">🎊</span><span class="emoji">💯</span><span class="emoji">👏</span>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="script.js?v=2.0"></script>
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js')
+                    .then((registration) => {
+                        console.log('SW registered: ', registration);
+                    })
+                    .catch((registrationError) => {
+                        console.log('SW registration failed: ', registrationError);
+                    });
+            });
+        }
+    </script>
+</body>
+</html>
