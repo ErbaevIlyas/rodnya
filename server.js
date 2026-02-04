@@ -316,6 +316,34 @@ io.on('connection', (socket) => {
         }
     });
     
+    // Загрузка истории общего чата
+    socket.on('load-general-chat', (data) => {
+        try {
+            db.all(
+                'SELECT * FROM messages WHERE isGeneral = 1 ORDER BY createdAt ASC LIMIT 100',
+                (err, messages) => {
+                    if (!err && messages) {
+                        const formattedMessages = messages.map(msg => ({
+                            id: msg.id.toString(),
+                            username: msg.fromUser,
+                            message: msg.message,
+                            filename: msg.filename,
+                            originalname: msg.originalname,
+                            url: msg.url,
+                            mimetype: msg.mimetype,
+                            caption: msg.caption,
+                            timestamp: msg.createdAt,
+                            type: msg.type
+                        }));
+                        socket.emit('load-general-messages', formattedMessages);
+                    }
+                }
+            );
+        } catch (error) {
+            console.error('Ошибка загрузки общего чата:', error);
+        }
+    });
+    
     // Обработка сообщений в общий чат
     socket.on('send-message', (data) => {
         try {

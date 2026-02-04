@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Родня - Социальная сеть</title>
-    <link rel="stylesheet" href="style.css?v=2.2">
+    <link rel="stylesheet" href="style.css?v=2.5">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#4facfe">
@@ -48,6 +48,9 @@
                 <i class="fas fa-users"></i>
                 <h1>Родня</h1>
             </div>
+            <button class="toggle-sidebar-btn" id="toggle-sidebar-btn" title="Пользователи">
+                <i class="fas fa-users"></i>
+            </button>
             <div class="user-info">
                 <span class="current-user" id="current-user"></span>
                 <span class="online-count">Онлайн: <span id="online-count">0</span></span>
@@ -135,7 +138,7 @@
     </div>
 
     <script src="/socket.io/socket.io.js"></script>
-    <script src="script.js?v=2.2"></script>
+    <script src="script.js?v=2.5"></script>
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {

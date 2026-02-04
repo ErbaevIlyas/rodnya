@@ -36,6 +36,7 @@ const closePreviewBtn = document.getElementById('close-preview');
 const usersList = document.getElementById('users-list');
 const chatHeader = document.getElementById('chat-header');
 const backToGeneralBtn = document.getElementById('back-to-general-btn');
+const toggleSidebarBtn = document.getElementById('toggle-sidebar-btn');
 
 // Переменные
 let currentUsername = '';
@@ -177,6 +178,12 @@ backToGeneralBtn.addEventListener('click', () => {
     backToGeneralChat();
 });
 
+// Кнопка открытия/закрытия боковой панели на мобильных
+toggleSidebarBtn.addEventListener('click', () => {
+    const sidebar = document.querySelector('.sidebar');
+    sidebar.classList.toggle('active');
+});
+
 // Обновление списка пользователей
 function updateUsersList() {
     usersList.innerHTML = '';
@@ -199,6 +206,11 @@ function updateUsersList() {
         
         userItem.addEventListener('click', () => {
             openPrivateChat(user);
+            // Закрываем боковую панель на мобильных
+            const sidebar = document.querySelector('.sidebar');
+            if (window.innerWidth <= 768) {
+                sidebar.classList.remove('active');
+            }
         });
         
         usersList.appendChild(userItem);
@@ -239,8 +251,8 @@ function backToGeneralChat() {
     `;
     updateUsersList();
     
-    // Загружаем историю общего чата
-    socket.emit('load-general-messages', {});
+    // Запрашиваем историю общего чата у сервера
+    socket.emit('load-general-chat', {});
     
     messageInput.focus();
 }
@@ -313,6 +325,8 @@ function handleFiles(files) {
     Array.from(files).forEach(file => {
         if (file.type.startsWith('image/')) {
             showImagePreview(file);
+        } else if (file.type.startsWith('video/')) {
+            showVideoPreview(file);
         } else {
             uploadFile(file);
         }
@@ -327,6 +341,37 @@ function showImagePreview(file) {
     reader.onload = (e) => {
         currentPreviewFile = file;
         previewImage.src = e.target.result;
+        imageCaptionInput.value = '';
+        imagePreviewModal.classList.add('active');
+    };
+    
+    reader.readAsDataURL(file);
+}
+
+// Предпросмотр видео
+function showVideoPreview(file) {
+    const reader = new FileReader();
+    
+    reader.onload = (e) => {
+        currentPreviewFile = file;
+        previewImage.src = e.target.result;
+        previewImage.style.display = 'none';
+        
+        // Создаем видео элемент
+        const videoElement = document.createElement('video');
+        videoElement.src = e.target.result;
+        videoElement.style.maxWidth = '100%';
+        videoElement.style.maxHeight = '60vh';
+        videoElement.style.borderRadius = '10px';
+        videoElement.style.marginBottom = '1rem';
+        videoElement.controls = true;
+        
+        const previewContent = document.querySelector('.preview-content');
+        const existingVideo = previewContent.querySelector('video');
+        if (existingVideo) existingVideo.remove();
+        
+        previewContent.insertBefore(videoElement, previewContent.querySelector('.preview-controls'));
+        
         imageCaptionInput.value = '';
         imagePreviewModal.classList.add('active');
     };
@@ -521,10 +566,6 @@ function displayMessage(data) {
                 <span class="timestamp">${data.timestamp}</span>
             </div>
             <div class="message-content">
-                <div class="file-info">
-                    <i class="fas ${getFileIcon(data.mimetype)} file-icon"></i>
-                    <span class="file-name">${data.originalname}</span>
-                </div>
                 ${getMediaPreview(data.url, data.mimetype, data.originalname)}
                 ${captionHtml}
             </div>
