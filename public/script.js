@@ -35,6 +35,7 @@ const cancelPreviewBtn = document.getElementById('cancel-preview');
 const closePreviewBtn = document.getElementById('close-preview');
 const usersList = document.getElementById('users-list');
 const chatHeader = document.getElementById('chat-header');
+const backToGeneralBtn = document.getElementById('back-to-general-btn');
 
 // Переменные
 let currentUsername = '';
@@ -171,6 +172,11 @@ logoutBtn.addEventListener('click', () => {
     loginUsernameInput.focus();
 });
 
+// Кнопка "Назад в общий чат"
+backToGeneralBtn.addEventListener('click', () => {
+    backToGeneralChat();
+});
+
 // Обновление списка пользователей
 function updateUsersList() {
     usersList.innerHTML = '';
@@ -202,12 +208,39 @@ function updateUsersList() {
 // Открытие приватного чата
 function openPrivateChat(username) {
     currentChatUser = username;
-    chatHeader.innerHTML = `<h2>💬 ${username}</h2>`;
+    const backBtn = document.getElementById('back-to-general-btn');
+    const chatTitle = document.getElementById('chat-title');
+    
+    backBtn.style.display = 'flex';
+    chatTitle.textContent = `💬 ${username}`;
     messagesContainer.innerHTML = '';
     updateUsersList();
     
     // Загружаем историю сообщений
     socket.emit('load-private-messages', { username: username });
+    
+    messageInput.focus();
+}
+
+// Возврат в общий чат
+function backToGeneralChat() {
+    currentChatUser = null;
+    const backBtn = document.getElementById('back-to-general-btn');
+    const chatTitle = document.getElementById('chat-title');
+    
+    backBtn.style.display = 'none';
+    chatTitle.textContent = 'Общий чат';
+    messagesContainer.innerHTML = `
+        <div class="welcome-message">
+            <i class="fas fa-heart"></i>
+            <h2>Добро пожаловать в Родню!</h2>
+            <p>Общайтесь с близкими, делитесь моментами жизни</p>
+        </div>
+    `;
+    updateUsersList();
+    
+    // Загружаем историю общего чата
+    socket.emit('load-general-messages', {});
     
     messageInput.focus();
 }

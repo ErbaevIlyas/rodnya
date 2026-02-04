@@ -165,6 +165,14 @@ io.on('connection', (socket) => {
                     } else {
                         console.log('✅ Пользователь зарегистрирован:', username);
                         socket.emit('register-response', { success: true, message: 'Регистрация успешна' });
+                        
+                        // Отправляем обновленный список пользователей всем
+                        db.all('SELECT username FROM users', (err, users) => {
+                            if (!err && users) {
+                                const usersList = users.map(u => u.username);
+                                io.emit('users-list', usersList);
+                            }
+                        });
                     }
                 }
             );

@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Родня - Социальная сеть</title>
-    <link rel="stylesheet" href="style.css?v=2.0">
+    <link rel="stylesheet" href="style.css?v=2.2">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#4facfe">
@@ -67,7 +67,10 @@
 
             <div class="chat-container">
                 <div class="chat-header" id="chat-header">
-                    <h2>Общий чат</h2>
+                    <button class="back-to-general-btn" id="back-to-general-btn" style="display: none;">
+                        <i class="fas fa-arrow-left"></i> Общий чат
+                    </button>
+                    <h2 id="chat-title">Общий чат</h2>
                 </div>
 
                 <div class="messages" id="messages">
@@ -132,7 +135,7 @@
     </div>
 
     <script src="/socket.io/socket.io.js"></script>
-    <script src="script.js?v=2.0"></script>
+    <script src="script.js?v=2.2"></script>
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
