@@ -165,12 +165,15 @@ socket.on('register-response', (data) => {
 
 socket.on('login-response', (data) => {
     if (data.success) {
-        currentUsername = loginUsernameInput.value.trim();
-        const password = loginPasswordInput.value.trim();
-        
-        // Сохраняем в localStorage
-        localStorage.setItem('username', currentUsername);
-        localStorage.setItem('password', password);
+        // Если это автовход, берем из localStorage
+        if (!currentUsername) {
+            currentUsername = localStorage.getItem('username');
+        } else {
+            currentUsername = loginUsernameInput.value.trim();
+            const password = loginPasswordInput.value.trim();
+            localStorage.setItem('username', currentUsername);
+            localStorage.setItem('password', password);
+        }
         
         currentUserSpan.textContent = `👤 ${currentUsername}`;
         authModal.style.display = 'none';
@@ -515,6 +518,8 @@ document.querySelectorAll('.emoji').forEach(emoji => {
 });
 
 // Голосовые сообщения
+let currentVoiceBlob = null;
+
 voiceBtn.addEventListener('click', toggleRecording);
 
 async function toggleRecording() {
@@ -532,9 +537,8 @@ async function toggleRecording() {
             
             mediaRecorder.onstop = () => {
                 const blob = new Blob(recordedChunks, { type: 'audio/webm' });
-                const file = new File([blob], `voice-${Date.now()}.webm`, { type: 'audio/webm' });
-                uploadFile(file);
-                
+                currentVoiceBlob = blob;
+                showVoicePreview(blob);
                 stream.getTracks().forEach(track => track.stop());
             };
             
@@ -552,6 +556,60 @@ async function toggleRecording() {
         voiceBtn.classList.remove('active');
         voiceBtn.innerHTML = '<i class="fas fa-microphone"></i>';
     }
+}
+
+// Превью голосового сообщения
+function showVoicePreview(blob) {
+    const url = URL.createObjectURL(blob);
+    
+    const modal = document.createElement('div');
+    modal.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0,0,0,0.7);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 2000;
+    `;
+    
+    const content = document.createElement('div');
+    content.style.cssText = `
+        background: white;
+        padding: 2rem;
+        border-radius: 15px;
+        text-align: center;
+        max-width: 300px;
+    `;
+    
+    content.innerHTML = `
+        <h3>Голосовое сообщение</h3>
+        <audio controls style="width: 100%; margin: 1rem 0;">
+            <source src="${url}" type="audio/webm">
+        </audio>
+        <div style="display: flex; gap: 1rem; margin-top: 1rem;">
+            <button id="cancel-voice" style="flex: 1; padding: 0.75rem; background: #6c757d; color: white; border: none; border-radius: 10px; cursor: pointer;">Отмена</button>
+            <button id="send-voice" style="flex: 1; padding: 0.75rem; background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); color: white; border: none; border-radius: 10px; cursor: pointer;">Отправить</button>
+        </div>
+    `;
+    
+    modal.appendChild(content);
+    document.body.appendChild(modal);
+    
+    document.getElementById('cancel-voice').onclick = () => {
+        modal.remove();
+        currentVoiceBlob = null;
+    };
+    
+    document.getElementById('send-voice').onclick = () => {
+        const file = new File([blob], `voice-${Date.now()}.webm`, { type: 'audio/webm' });
+        uploadFile(file);
+        modal.remove();
+        currentVoiceBlob = null;
+    };
 }
 
 // Socket события - Сообщения
