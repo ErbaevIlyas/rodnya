@@ -213,7 +213,11 @@ socket.on('login-response', (data) => {
         }
         // currentUsername уже установлен либо из input, либо из cookies
         
-        const password = loginPasswordInput.value.trim();
+        let password = loginPasswordInput.value.trim();
+        if (!password) {
+            // Если пароль не введен (автозаход), берем из cookies
+            password = getCookie('password');
+        }
         
         // Сохраняем в cookies на 30 дней
         setCookie('username', currentUsername, 30);
