@@ -4,34 +4,67 @@ const socketIo = require('socket.io');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
-const admin = require('firebase-admin');
+const { Pool } = require('pg');
 require('dotenv').config();
 
 const app = express();
 const server = http.createServer(app);
 const io = socketIo(server);
 
-// Firebase инициализация
-const serviceAccount = {
-    projectId: process.env.FIREBASE_PROJECT_ID,
-    privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
-    clientEmail: process.env.FIREBASE_CLIENT_EMAIL
-};
-
-admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount),
-    databaseURL: `https://${process.env.FIREBASE_PROJECT_ID}.firebaseio.com`
+// PostgreSQL подключение
+const pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: { rejectUnauthorized: false }
 });
 
-const db = admin.database();
-console.log('✅ Подключено к Firebase');
+pool.on('error', (err) => {
+    console.error('❌ Ошибка БД:', err);
+});
 
-// Создаем папку для загрузок если её нет
+// Инициализация БД
+async function initializeDB() {
+    try {
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS users (
+                id SERIAL PRIMARY KEY,
+                username VARCHAR(255) UNIQUE NOT NULL,
+                password VARCHAR(255) NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+        console.log('✅ Таблица users готова');
+
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS messages (
+                id SERIAL PRIMARY KEY,
+                from_user VARCHAR(255) NOT NULL,
+                to_user VARCHAR(255) NOT NULL,
+                message TEXT,
+                filename VARCHAR(255),
+                originalname VARCHAR(255),
+                url TEXT,
+                mimetype VARCHAR(255),
+                caption TEXT,
+                type VARCHAR(50) DEFAULT 'text',
+                is_general INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+        console.log('✅ Таблица messages готова');
+    } catch (err) {
+        console.error('❌ Ошибка инициализации БД:', err);
+    }
+}
+
+initializeDB();
+console.log('✅ Подключено к PostgreSQL');
+
+// Создаем папку для загрузок
 if (!fs.existsSync('uploads')) {
     fs.mkdirSync('uploads');
 }
 
-// Настройка multer для загрузки файлов
+// Multer
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
         cb(null, 'uploads/');
@@ -43,9 +76,7 @@ const storage = multer.diskStorage({
 
 const upload = multer({ 
     storage: storage,
-    limits: {
-        fileSize: 50 * 1024 * 1024
-    }
+    limits: { fileSize: 50 * 1024 * 1024 }
 });
 
 // Статические файлы
@@ -102,36 +133,24 @@ io.on('connection', (socket) => {
                 return;
             }
             
-            // Проверяем существует ли пользователь
-            const snapshot = await db.ref('users').orderByChild('username').equalTo(username).once('value');
-            
-            if (snapshot.exists()) {
-                socket.emit('register-response', { success: false, message: 'Пользователь уже существует' });
-                return;
-            }
-            
-            // Создаем пользователя
-            const userId = db.ref('users').push().key;
-            await db.ref(`users/${userId}`).set({
-                username: username,
-                password: password,
-                createdAt: new Date().toISOString()
-            });
+            await pool.query(
+                'INSERT INTO users (username, password) VALUES ($1, $2)',
+                [username, password]
+            );
             
             console.log('✅ Пользователь зарегистрирован:', username);
             socket.emit('register-response', { success: true, message: 'Регистрация успешна' });
             
-            // Отправляем обновленный список пользователей
-            const usersSnapshot = await db.ref('users').once('value');
-            const users = [];
-            usersSnapshot.forEach(child => {
-                users.push(child.val().username);
-            });
-            io.emit('users-list', users);
+            const result = await pool.query('SELECT username FROM users');
+            const usersList = result.rows.map(u => u.username);
+            io.emit('users-list', usersList);
             
         } catch (error) {
-            console.error('❌ Ошибка регистрации:', error.message);
-            socket.emit('register-response', { success: false, message: 'Ошибка сервера' });
+            if (error.code === '23505') {
+                socket.emit('register-response', { success: false, message: 'Пользователь уже существует' });
+            } else {
+                socket.emit('register-response', { success: false, message: 'Ошибка БД' });
+            }
         }
     });
     
@@ -145,29 +164,22 @@ io.on('connection', (socket) => {
                 return;
             }
             
-            // Ищем пользователя
-            const snapshot = await db.ref('users').once('value');
-            let user = null;
-            let userId = null;
+            const result = await pool.query(
+                'SELECT * FROM users WHERE username = $1',
+                [username]
+            );
             
-            snapshot.forEach(child => {
-                if (child.val().username === username) {
-                    user = child.val();
-                    userId = child.key;
-                }
-            });
-            
-            if (!user) {
+            if (result.rows.length === 0) {
                 socket.emit('login-response', { success: false, message: 'Пользователь не найден' });
                 return;
             }
             
+            const user = result.rows[0];
             if (user.password !== password) {
                 socket.emit('login-response', { success: false, message: 'Неверный пароль' });
                 return;
             }
             
-            // Сохраняем сессию
             socket.username = username;
             connectedUsers.set(socket.id, { username, socketId: socket.id });
             
@@ -175,33 +187,36 @@ io.on('connection', (socket) => {
             socket.emit('login-response', { success: true, message: 'Вход успешен' });
             
             // Отправляем список пользователей
-            const usersSnapshot = await db.ref('users').once('value');
-            const users = [];
-            usersSnapshot.forEach(child => {
-                users.push(child.val().username);
-            });
-            socket.emit('users-list', users);
+            const usersResult = await pool.query('SELECT username FROM users');
+            const usersList = usersResult.rows.map(u => u.username);
+            socket.emit('users-list', usersList);
             
             // Отправляем онлайн пользователей
             const onlineUsers = Array.from(connectedUsers.values()).map(u => u.username);
             io.emit('online-users', onlineUsers);
             
             // Отправляем историю общего чата
-            const messagesSnapshot = await db.ref('messages').orderByChild('isGeneral').equalTo(1).limitToLast(100).once('value');
-            const messages = [];
-            messagesSnapshot.forEach(child => {
-                messages.unshift({
-                    id: child.key,
-                    ...child.val()
-                });
-            });
+            const messagesResult = await pool.query(
+                'SELECT * FROM messages WHERE is_general = 1 ORDER BY created_at ASC LIMIT 100'
+            );
+            const messages = messagesResult.rows.map(msg => ({
+                id: msg.id.toString(),
+                username: msg.from_user,
+                message: msg.message,
+                filename: msg.filename,
+                originalname: msg.originalname,
+                url: msg.url,
+                mimetype: msg.mimetype,
+                caption: msg.caption,
+                timestamp: msg.created_at,
+                type: msg.type
+            }));
             socket.emit('load-general-messages', messages);
             
-            // Уведомляем всех
             io.to('general').emit('user-status', { username: username, status: 'online' });
             
         } catch (error) {
-            console.error('❌ Ошибка входа:', error.message);
+            console.error('Ошибка входа:', error);
             socket.emit('login-response', { success: false, message: 'Ошибка сервера' });
         }
     });
@@ -214,21 +229,29 @@ io.on('connection', (socket) => {
             
             if (!currentUser) return;
             
-            const snapshot = await db.ref('messages').once('value');
-            const messages = [];
+            const result = await pool.query(
+                `SELECT * FROM messages 
+                 WHERE is_general = 0 AND 
+                 ((from_user = $1 AND to_user = $2) OR (from_user = $2 AND to_user = $1))
+                 ORDER BY created_at ASC LIMIT 100`,
+                [currentUser, otherUser]
+            );
             
-            snapshot.forEach(child => {
-                const msg = child.val();
-                if (msg.isGeneral === 0 && 
-                    ((msg.fromUser === currentUser && msg.toUser === otherUser) ||
-                     (msg.fromUser === otherUser && msg.toUser === currentUser))) {
-                    messages.push({ id: child.key, ...msg });
-                }
-            });
+            const messages = result.rows.map(msg => ({
+                id: msg.id.toString(),
+                from: msg.from_user,
+                to: msg.to_user,
+                message: msg.message,
+                filename: msg.filename,
+                originalname: msg.originalname,
+                url: msg.url,
+                mimetype: msg.mimetype,
+                caption: msg.caption,
+                timestamp: msg.created_at,
+                type: msg.type
+            }));
             
-            messages.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
-            socket.emit('private-messages-loaded', messages.slice(-100));
-            
+            socket.emit('private-messages-loaded', messages);
         } catch (error) {
             console.error('Ошибка загрузки сообщений:', error);
         }
@@ -237,11 +260,23 @@ io.on('connection', (socket) => {
     // Загрузка общего чата
     socket.on('load-general-chat', async (data) => {
         try {
-            const snapshot = await db.ref('messages').orderByChild('isGeneral').equalTo(1).limitToLast(100).once('value');
-            const messages = [];
-            snapshot.forEach(child => {
-                messages.unshift({ id: child.key, ...child.val() });
-            });
+            const result = await pool.query(
+                'SELECT * FROM messages WHERE is_general = 1 ORDER BY created_at ASC LIMIT 100'
+            );
+            
+            const messages = result.rows.map(msg => ({
+                id: msg.id.toString(),
+                username: msg.from_user,
+                message: msg.message,
+                filename: msg.filename,
+                originalname: msg.originalname,
+                url: msg.url,
+                mimetype: msg.mimetype,
+                caption: msg.caption,
+                timestamp: msg.created_at,
+                type: msg.type
+            }));
+            
             socket.emit('load-general-messages', messages);
         } catch (error) {
             console.error('Ошибка загрузки общего чата:', error);
@@ -254,19 +289,14 @@ io.on('connection', (socket) => {
             const username = socket.username;
             if (!username) return;
             
-            const message = {
-                fromUser: username,
-                toUser: 'general',
-                message: data.message,
-                type: 'text',
-                isGeneral: 1,
-                createdAt: new Date().toISOString()
-            };
-            
-            const ref = await db.ref('messages').push(message);
+            const result = await pool.query(
+                `INSERT INTO messages (from_user, to_user, message, type, is_general) 
+                 VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+                [username, 'general', data.message, 'text', 1]
+            );
             
             const formattedMessage = {
-                id: ref.key,
+                id: result.rows[0].id.toString(),
                 username: username,
                 message: data.message,
                 timestamp: new Date().toLocaleString('ru-RU'),
@@ -274,7 +304,6 @@ io.on('connection', (socket) => {
             };
             
             io.to('general').emit('new-message', formattedMessage);
-            
         } catch (error) {
             console.error('Ошибка отправки сообщения:', error);
         }
@@ -286,23 +315,14 @@ io.on('connection', (socket) => {
             const username = socket.username;
             if (!username) return;
             
-            const message = {
-                fromUser: username,
-                toUser: 'general',
-                filename: data.filename,
-                originalname: data.originalname,
-                url: data.url,
-                mimetype: data.mimetype,
-                caption: data.caption || '',
-                type: 'file',
-                isGeneral: 1,
-                createdAt: new Date().toISOString()
-            };
-            
-            const ref = await db.ref('messages').push(message);
+            const result = await pool.query(
+                `INSERT INTO messages (from_user, to_user, filename, originalname, url, mimetype, caption, type, is_general) 
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
+                [username, 'general', data.filename, data.originalname, data.url, data.mimetype, data.caption || '', 'file', 1]
+            );
             
             const formattedMessage = {
-                id: ref.key,
+                id: result.rows[0].id.toString(),
                 username: username,
                 filename: data.filename,
                 originalname: data.originalname,
@@ -314,7 +334,6 @@ io.on('connection', (socket) => {
             };
             
             io.to('general').emit('new-message', formattedMessage);
-            
         } catch (error) {
             console.error('Ошибка отправки файла:', error);
         }
@@ -323,7 +342,7 @@ io.on('connection', (socket) => {
     // Удаление сообщения
     socket.on('delete-message', async (data) => {
         try {
-            await db.ref(`messages/${data.id}`).remove();
+            await pool.query('DELETE FROM messages WHERE id = $1', [data.id]);
             io.emit('message-deleted', { id: data.id });
         } catch (error) {
             console.error('Ошибка удаления сообщения:', error);
@@ -338,18 +357,12 @@ io.on('connection', (socket) => {
             
             const { recipientUsername, message } = data;
             
-            const msg = {
-                fromUser: senderUsername,
-                toUser: recipientUsername,
-                message: message,
-                type: 'text',
-                isGeneral: 0,
-                createdAt: new Date().toISOString()
-            };
+            const result = await pool.query(
+                `INSERT INTO messages (from_user, to_user, message, type, is_general) 
+                 VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+                [senderUsername, recipientUsername, message, 'text', 0]
+            );
             
-            const ref = await db.ref('messages').push(msg);
-            
-            // Находим socket ID получателя
             let recipientSocketId = null;
             for (const [socketId, user] of connectedUsers.entries()) {
                 if (user.username === recipientUsername) {
@@ -359,7 +372,7 @@ io.on('connection', (socket) => {
             }
             
             const formattedMessage = {
-                id: ref.key,
+                id: result.rows[0].id.toString(),
                 from: senderUsername,
                 to: recipientUsername,
                 message: message,
@@ -372,7 +385,6 @@ io.on('connection', (socket) => {
             if (recipientSocketId) {
                 io.to(recipientSocketId).emit('private-message', formattedMessage);
             }
-            
         } catch (error) {
             console.error('Ошибка отправки приватного сообщения:', error);
         }
@@ -386,20 +398,11 @@ io.on('connection', (socket) => {
             
             const { recipientUsername, filename, originalname, url, mimetype, caption } = data;
             
-            const msg = {
-                fromUser: senderUsername,
-                toUser: recipientUsername,
-                filename: filename,
-                originalname: originalname,
-                url: url,
-                mimetype: mimetype,
-                caption: caption || '',
-                type: 'file',
-                isGeneral: 0,
-                createdAt: new Date().toISOString()
-            };
-            
-            const ref = await db.ref('messages').push(msg);
+            const result = await pool.query(
+                `INSERT INTO messages (from_user, to_user, filename, originalname, url, mimetype, caption, type, is_general) 
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
+                [senderUsername, recipientUsername, filename, originalname, url, mimetype, caption || '', 'file', 0]
+            );
             
             let recipientSocketId = null;
             for (const [socketId, user] of connectedUsers.entries()) {
@@ -410,7 +413,7 @@ io.on('connection', (socket) => {
             }
             
             const formattedMessage = {
-                id: ref.key,
+                id: result.rows[0].id.toString(),
                 from: senderUsername,
                 to: recipientUsername,
                 filename: filename,
@@ -427,7 +430,6 @@ io.on('connection', (socket) => {
             if (recipientSocketId) {
                 io.to(recipientSocketId).emit('private-message', formattedMessage);
             }
-            
         } catch (error) {
             console.error('Ошибка отправки приватного файла:', error);
         }
@@ -458,6 +460,7 @@ server.listen(PORT, '0.0.0.0', () => {
 });
 
 process.on('SIGINT', () => {
-    console.log('Закрытие Firebase...');
+    console.log('Закрытие БД...');
+    pool.end();
     process.exit(0);
 });
