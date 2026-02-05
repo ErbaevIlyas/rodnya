@@ -26,8 +26,11 @@ const messagesContainer = document.getElementById('messages');
 const messageInput = document.getElementById('message-input');
 const sendBtn = document.getElementById('send-btn');
 const fileInput = document.getElementById('file-input');
+const photoInput = document.getElementById('photo-input');
+const videoInput = document.getElementById('video-input');
 const fileUploadArea = document.getElementById('file-upload-area');
-const attachBtn = document.getElementById('attach-btn');
+const photoBtn = document.getElementById('photo-btn');
+const videoBtn = document.getElementById('video-btn');
 const emojiBtn = document.getElementById('emoji-btn');
 const voiceBtn = document.getElementById('voice-btn');
 const emojiPicker = document.getElementById('emoji-picker');
@@ -52,6 +55,8 @@ let recordedChunks = [];
 let currentPreviewFile = null;
 let allUsers = [];
 let unreadMessages = {}; // {username: count}
+let replyToMessage = null; // Для reply функционала
+let allMessages = {}; // Кеш всех сообщений для reply
 
 // Функция для звукового уведомления
 function playNotificationSound() {
@@ -172,13 +177,12 @@ socket.on('register-response', (data) => {
 
 socket.on('login-response', (data) => {
     if (data.success) {
-        // Если это ручной вход, сохраняем
-        if (!localStorage.getItem('username')) {
-            currentUsername = loginUsernameInput.value.trim();
-            const password = loginPasswordInput.value.trim();
-            localStorage.setItem('username', currentUsername);
-            localStorage.setItem('password', password);
-        }
+        // Сохраняем учетные данные при успешном входе
+        currentUsername = loginUsernameInput.value.trim() || currentUsername;
+        const password = loginPasswordInput.value.trim();
+        
+        localStorage.setItem('username', currentUsername);
+        localStorage.setItem('password', password);
         
         currentUserSpan.textContent = `👤 ${currentUsername}`;
         authModal.style.display = 'none';
@@ -210,6 +214,10 @@ socket.on('online-users', (onlineUsers) => {
 
 // Выход
 logoutBtn.addEventListener('click', () => {
+    // Удаляем сохраненные данные
+    localStorage.removeItem('username');
+    localStorage.removeItem('password');
+    
     currentUsername = '';
     currentChatUser = null;
     authModal.style.display = 'flex';
@@ -217,6 +225,8 @@ logoutBtn.addEventListener('click', () => {
     messagesContainer.innerHTML = '<div class="welcome-message"><i class="fas fa-heart"></i><h2>Добро пожаловать в Родню!</h2><p>Общайтесь с близкими, делитесь моментами жизни</p></div>';
     loginForm.style.display = 'block';
     registerForm.style.display = 'none';
+    loginUsernameInput.value = '';
+    loginPasswordInput.value = '';
     loginUsernameInput.focus();
 });
 
@@ -286,6 +296,17 @@ function openPrivateChat(username) {
     unreadMessages[username] = 0;
     updateUsersList();
     
+    // Подсвечиваем текущего пользователя
+    document.querySelectorAll('.user-item').forEach(item => {
+        item.classList.remove('private-chat');
+    });
+    const userItem = Array.from(document.querySelectorAll('.user-item')).find(item => 
+        item.textContent.includes(username)
+    );
+    if (userItem) {
+        userItem.classList.add('private-chat');
+    }
+    
     // Загружаем историю сообщений
     socket.emit('load-private-messages', { username: username });
     
@@ -307,6 +328,12 @@ function backToGeneralChat() {
             <p>Общайтесь с близкими, делитесь моментами жизни</p>
         </div>
     `;
+    
+    // Убираем подсветку со всех пользователей
+    document.querySelectorAll('.user-item').forEach(item => {
+        item.classList.remove('private-chat');
+    });
+    
     updateUsersList();
     
     // Запрашиваем историю общего чата у сервера
@@ -347,13 +374,35 @@ messageInput.addEventListener('keypress', (e) => {
     }
 });
 
-// Прикрепление файлов
-attachBtn.addEventListener('click', () => {
-    fileUploadArea.classList.toggle('active');
+// Кнопки для фото и видео
+photoBtn.addEventListener('click', () => {
+    photoInput.click();
 });
 
-fileUploadArea.addEventListener('click', () => {
-    fileInput.click();
+videoBtn.addEventListener('click', () => {
+    videoInput.click();
+});
+
+// Обработчики input файлов
+photoInput.addEventListener('change', (e) => {
+    if (e.target.files.length > 0) {
+        handleFiles(e.target.files);
+        photoInput.value = '';
+    }
+});
+
+videoInput.addEventListener('change', (e) => {
+    if (e.target.files.length > 0) {
+        handleFiles(e.target.files);
+        videoInput.value = '';
+    }
+});
+
+fileInput.addEventListener('change', (e) => {
+    if (e.target.files.length > 0) {
+        handleFiles(e.target.files);
+        fileInput.value = '';
+    }
 });
 
 // Drag & Drop
@@ -688,6 +737,9 @@ function displayMessage(data) {
     const isOwn = data.username === currentUsername || data.from === currentUsername;
     messageDiv.classList.add(isOwn ? 'own' : 'other');
     
+    // Сохраняем сообщение в кеш для reply
+    allMessages[data.id] = data;
+    
     let deleteBtn = '';
     if (isOwn) {
         deleteBtn = `<button class="delete-btn" onclick="deleteMessage('${data.id}')">Удалить</button>`;
@@ -695,32 +747,53 @@ function displayMessage(data) {
     
     const senderName = data.username || data.from;
     
+    // Галочки для приватных сообщений
+    let readStatus = '';
+    if (isOwn && !currentChatUser) {
+        // Только в общем чате показываем галочки
+        readStatus = data.isRead ? '✓✓' : '✓';
+    }
+    
+    // Reply блок
+    let replyBlock = '';
+    if (data.replyToId && allMessages[data.replyToId]) {
+        const repliedMsg = allMessages[data.replyToId];
+        const repliedSender = repliedMsg.username || repliedMsg.from;
+        replyBlock = `<div class="reply-block">↳ <strong>${repliedSender}:</strong> ${repliedMsg.message?.substring(0, 50) || 'Файл'}</div>`;
+    }
+    
     if (data.type === 'file') {
         messageDiv.classList.add('file-message');
         let captionHtml = '';
         if (data.caption) {
-            captionHtml = `<div class="image-caption">"${data.caption}"</div>`;
+            captionHtml = `<div class="message-caption">"${data.caption}"</div>`;
         }
         
         messageDiv.innerHTML = `
             ${deleteBtn}
             <div class="message-header">
-                <span class="username">${senderName}</span>
+                <span class="username clickable" onclick="openChatWithUser('${senderName}')">${senderName}</span>
                 <span class="timestamp">${data.timestamp}</span>
+                <span class="read-status">${readStatus}</span>
             </div>
+            ${replyBlock}
             <div class="message-content">
                 ${getMediaPreview(data.url, data.mimetype, data.originalname)}
                 ${captionHtml}
             </div>
+            <button class="reply-btn" onclick="setReplyTo('${data.id}', '${senderName}')">Ответить</button>
         `;
     } else {
         messageDiv.innerHTML = `
             ${deleteBtn}
             <div class="message-header">
-                <span class="username">${senderName}</span>
+                <span class="username clickable" onclick="openChatWithUser('${senderName}')">${senderName}</span>
                 <span class="timestamp">${data.timestamp}</span>
+                <span class="read-status">${readStatus}</span>
             </div>
+            ${replyBlock}
             <div class="message-content">${data.message}</div>
+            <button class="reply-btn" onclick="setReplyTo('${data.id}', '${senderName}')">Ответить</button>
         `;
     }
     
@@ -770,4 +843,72 @@ function getMediaPreview(url, mimetype, filename) {
     }
     
     return `<a href="${url}" target="_blank" class="file-link">Скачать файл</a>`;
+}
+
+
+// Reply функционал
+function setReplyTo(messageId, senderName) {
+    replyToMessage = messageId;
+    const msg = allMessages[messageId];
+    const preview = msg.message?.substring(0, 50) || 'Файл';
+    
+    const replyIndicator = document.getElementById('reply-indicator') || createReplyIndicator();
+    replyIndicator.innerHTML = `↳ Ответ на <strong>${senderName}:</strong> ${preview} <button onclick="cancelReply()" style="margin-left: 10px;">✕</button>`;
+    replyIndicator.style.display = 'block';
+    messageInput.focus();
+}
+
+function cancelReply() {
+    replyToMessage = null;
+    const replyIndicator = document.getElementById('reply-indicator');
+    if (replyIndicator) {
+        replyIndicator.style.display = 'none';
+    }
+}
+
+function createReplyIndicator() {
+    const indicator = document.createElement('div');
+    indicator.id = 'reply-indicator';
+    indicator.style.cssText = 'padding: 8px 12px; background: #f0f0f0; border-left: 3px solid #667eea; margin: 8px 12px 0; font-size: 14px; display: none;';
+    const inputContainer = document.querySelector('.message-input-container');
+    inputContainer.insertBefore(indicator, inputContainer.firstChild);
+    return indicator;
+}
+
+// Открытие чата с пользователем по клику на имя
+function openChatWithUser(username) {
+    if (username === currentUsername) return;
+    if (currentChatUser === username) return;
+    
+    openPrivateChat(username);
+    
+    // Закрываем боковую панель на мобильных
+    const sidebar = document.querySelector('.sidebar');
+    if (sidebar && sidebar.classList.contains('active')) {
+        sidebar.classList.remove('active');
+    }
+}
+
+// Обновление функции sendMessage для отправки reply
+const originalSendMessage = sendMessage;
+function sendMessage() {
+    const message = messageInput.value.trim();
+    if (!message) return;
+    
+    if (currentChatUser) {
+        socket.emit('send-private-message', {
+            recipientUsername: currentChatUser,
+            message: message,
+            replyToId: replyToMessage
+        });
+    } else {
+        socket.emit('send-message', {
+            message: message,
+            replyToId: replyToMessage
+        });
+    }
+    
+    messageInput.value = '';
+    cancelReply();
+    removeWelcomeMessage();
 }
