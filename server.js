@@ -468,6 +468,21 @@ io.on('connection', (socket) => {
         }
     });
     
+    // Отметить сообщение как прочитанное
+    socket.on('mark-as-read', async (data) => {
+        try {
+            await pool.query(
+                'UPDATE messages SET read_status = 2 WHERE id = $1',
+                [data.id]
+            );
+            
+            // Отправляем обновление всем
+            io.emit('message-read', { id: data.id });
+        } catch (error) {
+            console.error('Ошибка отметки прочитанности:', error);
+        }
+    });
+    
     // Отключение
     socket.on('disconnect', () => {
         console.log('👤 Пользователь отключился:', socket.id);

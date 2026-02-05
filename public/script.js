@@ -399,26 +399,26 @@ function openPrivateChat(username) {
     
     // Получаем информацию о пользователе
     const userInfo = allUsers.find(u => u.username === username);
-    let statusText = '⚫ Офлайн';
+    let statusText = 'Был в сети';
     
     if (userInfo) {
         if (userInfo.isOnline) {
-            statusText = '🟢 Онлайн';
+            statusText = 'Онлайн';
         } else if (userInfo.lastOnline) {
             const lastOnlineDate = new Date(userInfo.lastOnline);
             const now = new Date();
             const diffMinutes = Math.floor((now - lastOnlineDate) / 60000);
             
             if (diffMinutes < 1) {
-                statusText = '🟢 Только что';
+                statusText = 'Только что';
             } else if (diffMinutes < 60) {
-                statusText = `⚫ Был онлайн: ${diffMinutes} мин назад`;
+                statusText = `Был в сети ${diffMinutes} мин назад`;
             } else if (diffMinutes < 1440) {
                 const hours = Math.floor(diffMinutes / 60);
-                statusText = `⚫ Был онлайн: ${hours}ч назад`;
+                statusText = `Был в сети ${hours}ч назад`;
             } else {
                 const days = Math.floor(diffMinutes / 1440);
-                statusText = `⚫ Был онлайн: ${days}д назад`;
+                statusText = `Был в сети ${days}д назад`;
             }
         }
     }
@@ -811,11 +811,25 @@ socket.on('new-message', (data) => {
 socket.on('load-general-messages', (loadedMessages) => {
     messagesContainer.innerHTML = '';
     loadedMessages.forEach(msg => displayMessage(msg));
+    
+    // Отправляем событие что сообщения прочитаны
+    loadedMessages.forEach(msg => {
+        if (msg.username !== currentUsername && msg.readStatus < 2) {
+            socket.emit('mark-as-read', { id: msg.id });
+        }
+    });
 });
 
 socket.on('private-messages-loaded', (loadedMessages) => {
     messagesContainer.innerHTML = '';
     loadedMessages.forEach(msg => displayMessage(msg));
+    
+    // Отправляем событие что сообщения прочитаны
+    loadedMessages.forEach(msg => {
+        if (msg.from !== currentUsername && msg.readStatus < 2) {
+            socket.emit('mark-as-read', { id: msg.id });
+        }
+    });
 });
 
 socket.on('private-message', (data) => {
@@ -850,14 +864,14 @@ socket.on('message-deleted', (data) => {
     }
 });
 
-socket.on('user-status-changed', (data) => {
-    const chatTitle = document.getElementById('chat-title');
-    if (currentChatUser === data.username) {
-        const isOnline = data.status === 'online';
-        const statusIcon = isOnline ? '🟢' : '⚫';
-        chatTitle.textContent = `💬 ${data.username} ${statusIcon}`;
+socket.on('message-read', (data) => {
+    const messageDiv = document.getElementById(`msg-${data.id}`);
+    if (messageDiv) {
+        const statusSpan = messageDiv.querySelector('.read-status');
+        if (statusSpan) {
+            statusSpan.textContent = '✓✓';
+        }
     }
-    updateUsersList();
 });
 
 // Отображение сообщения
