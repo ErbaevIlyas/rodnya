@@ -35,6 +35,11 @@ async function initializeDB() {
         `);
         console.log('✅ Таблица users готова');
 
+        // Добавляем колонку last_online если её нет
+        await pool.query(`
+            ALTER TABLE users ADD COLUMN IF NOT EXISTS last_online TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        `);
+
         await pool.query(`
             CREATE TABLE IF NOT EXISTS messages (
                 id SERIAL PRIMARY KEY,
@@ -53,6 +58,11 @@ async function initializeDB() {
             )
         `);
         console.log('✅ Таблица messages готова');
+
+        // Добавляем колонку read_status если её нет
+        await pool.query(`
+            ALTER TABLE messages ADD COLUMN IF NOT EXISTS read_status INTEGER DEFAULT 0
+        `);
     } catch (err) {
         console.error('❌ Ошибка инициализации БД:', err);
     }
