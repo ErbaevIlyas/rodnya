@@ -68,7 +68,16 @@ function playNotificationSound() {
     oscillator.stop(audioContext.currentTime + 0.5);
 }// Инициализация
 document.addEventListener('DOMContentLoaded', () => {
-    loginUsernameInput.focus();
+    // Проверяем есть ли сохраненная сессия
+    const savedUsername = localStorage.getItem('username');
+    const savedPassword = localStorage.getItem('password');
+    
+    if (savedUsername && savedPassword) {
+        // Автоматически входим
+        socket.emit('login', { username: savedUsername, password: savedPassword });
+    } else {
+        loginUsernameInput.focus();
+    }
 });
 
 // Переключение между формами
@@ -157,6 +166,12 @@ socket.on('register-response', (data) => {
 socket.on('login-response', (data) => {
     if (data.success) {
         currentUsername = loginUsernameInput.value.trim();
+        const password = loginPasswordInput.value.trim();
+        
+        // Сохраняем в localStorage
+        localStorage.setItem('username', currentUsername);
+        localStorage.setItem('password', password);
+        
         currentUserSpan.textContent = `👤 ${currentUsername}`;
         authModal.style.display = 'none';
         mainContainer.style.display = 'flex';
