@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, shrink-to-fit=no">
     <title>Родня - Социальная сеть</title>
-    <link rel="stylesheet" href="style.css?v=11.6">
+    <link rel="stylesheet" href="style.css?v=11.8">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#4facfe">
@@ -111,12 +111,17 @@
                     
                     <div class="input-area">
                         <div class="input-controls">
-                            <button class="control-btn photo-btn" id="photo-btn" title="Фото">
-                                <i class="fas fa-image"></i>
+                            <button class="control-btn" id="attach-btn" title="Прикрепить">
+                                <i class="fas fa-paperclip"></i>
                             </button>
-                            <button class="control-btn video-btn" id="video-btn" title="Видео">
-                                <i class="fas fa-video"></i>
-                            </button>
+                            <div class="attach-menu" id="attach-menu">
+                                <button class="attach-option" id="photo-btn" title="Фото">
+                                    <i class="fas fa-image"></i> Фото
+                                </button>
+                                <button class="attach-option" id="video-btn" title="Видео">
+                                    <i class="fas fa-video"></i> Видео
+                                </button>
+                            </div>
                             <button class="control-btn" id="emoji-btn" title="Эмодзи">
                                 <i class="fas fa-smile"></i>
                             </button>
@@ -147,7 +152,7 @@
     </div>
 
     <script src="/socket.io/socket.io.js"></script>
-    <script src="script.js?v=11.6"></script>
+    <script src="script.js?v=11.8"></script>
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {

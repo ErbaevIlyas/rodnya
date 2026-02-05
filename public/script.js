@@ -55,6 +55,8 @@ const videoInput = document.getElementById('video-input');
 const fileUploadArea = document.getElementById('file-upload-area');
 const photoBtn = document.getElementById('photo-btn');
 const videoBtn = document.getElementById('video-btn');
+const attachBtn = document.getElementById('attach-btn');
+const attachMenu = document.getElementById('attach-menu');
 const emojiBtn = document.getElementById('emoji-btn');
 const voiceBtn = document.getElementById('voice-btn');
 const emojiPicker = document.getElementById('emoji-picker');
@@ -430,10 +432,23 @@ messageInput.addEventListener('keypress', (e) => {
 // Кнопки для фото и видео
 photoBtn.addEventListener('click', () => {
     photoInput.click();
+    attachMenu.classList.remove('active');
 });
 
 videoBtn.addEventListener('click', () => {
     videoInput.click();
+    attachMenu.classList.remove('active');
+});
+
+// Меню прикрепления
+attachBtn.addEventListener('click', () => {
+    attachMenu.classList.toggle('active');
+});
+
+document.addEventListener('click', (e) => {
+    if (!attachBtn.contains(e.target) && !attachMenu.contains(e.target)) {
+        attachMenu.classList.remove('active');
+    }
 });
 
 // Обработчики input файлов
@@ -809,7 +824,18 @@ function displayMessage(data) {
             showContextMenu(data.id, e.clientX, e.clientY);
         });
         
-        // Долгое нажатие (телефон)
+        // Клик на мобильных (для удаления)
+        if (window.innerWidth <= 899) {
+            messageDiv.addEventListener('click', (e) => {
+                // Не показываем меню если кликнули на ссылку или медиа
+                if (e.target.tagName === 'A' || e.target.tagName === 'IMG' || e.target.tagName === 'VIDEO' || e.target.tagName === 'AUDIO') {
+                    return;
+                }
+                showContextMenu(data.id, e.clientX, e.clientY);
+            });
+        }
+        
+        // Долгое нажатие (телефон) - для копирования текста
         messageDiv.addEventListener('touchstart', (e) => {
             longPressTimer = setTimeout(() => {
                 const touch = e.touches[0];

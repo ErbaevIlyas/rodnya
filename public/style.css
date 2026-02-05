@@ -519,6 +519,7 @@ body {
     flex-shrink: 0;
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
+    position: relative;
 }
 
 .control-btn {
@@ -538,6 +539,54 @@ body {
 
 .control-btn:hover {
     background: rgba(102, 126, 234, 0.1);
+}
+
+/* Меню прикрепления */
+.attach-menu {
+    position: absolute;
+    bottom: 50px;
+    left: 10px;
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    display: none;
+    z-index: 50;
+    min-width: 140px;
+    overflow: hidden;
+}
+
+.attach-menu.active {
+    display: flex;
+    flex-direction: column;
+}
+
+.attach-option {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    border: none;
+    background: none;
+    text-align: left;
+    cursor: pointer;
+    font-size: 14px;
+    color: #333;
+    border-bottom: 1px solid #f0f0f0;
+    transition: background 0.2s;
+}
+
+.attach-option:last-child {
+    border-bottom: none;
+}
+
+.attach-option:hover {
+    background: #f5f5f5;
+}
+
+.attach-option i {
+    font-size: 16px;
+    color: #667eea;
 }
 
 #message-input {
@@ -801,17 +850,17 @@ body {
 /* ===== МОБИЛЬНЫЕ СТИЛИ ===== */
 @media (max-width: 899px) {
     .control-btn {
-        min-width: 40px;
-        min-height: 40px;
+        min-width: 44px;
+        min-height: 44px;
         padding: 8px;
         font-size: 20px;
     }
     
     .send-btn {
-        width: 40px;
-        height: 40px;
-        min-width: 40px;
-        min-height: 40px;
+        width: 44px;
+        height: 44px;
+        min-width: 44px;
+        min-height: 44px;
         font-size: 18px;
     }
     
@@ -820,9 +869,14 @@ body {
         padding: 8px;
     }
     
+    .input-controls {
+        gap: 2px;
+    }
+    
     #message-input {
-        padding: 6px 10px;
+        padding: 8px 12px;
         font-size: 16px;
+        min-width: 100px;
     }
 }
 
@@ -894,11 +948,13 @@ body {
     .input-area {
         padding: 12px 20px;
         gap: 8px;
+        min-height: 60px;
     }
 
     #message-input {
         padding: 10px 14px;
         font-size: 13px;
+        min-width: 200px;
     }
 
     .send-btn {
