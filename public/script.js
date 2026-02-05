@@ -46,8 +46,27 @@ let mediaRecorder;
 let recordedChunks = [];
 let currentPreviewFile = null;
 let allUsers = [];
+let unreadMessages = {}; // {username: count}
 
-// Инициализация
+// Функция для звукового уведомления
+function playNotificationSound() {
+    // Создаем простой звук через Web Audio API
+    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    const oscillator = audioContext.createOscillator();
+    const gainNode = audioContext.createGain();
+    
+    oscillator.connect(gainNode);
+    gainNode.connect(audioContext.destination);
+    
+    oscillator.frequency.value = 800;
+    oscillator.type = 'sine';
+    
+    gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+    
+    oscillator.start(audioContext.currentTime);
+    oscillator.stop(audioContext.currentTime + 0.5);
+}// Инициализация
 document.addEventListener('DOMContentLoaded', () => {
     loginUsernameInput.focus();
 });
@@ -146,6 +165,11 @@ socket.on('login-response', (data) => {
         // Очищаем форму
         loginUsernameInput.value = '';
         loginPasswordInput.value = '';
+        
+        // Запрашиваем разрешение на уведомления
+        if ('Notification' in window && Notification.permission === 'default') {
+            Notification.requestPermission();
+        }
     } else {
         alert('Ошибка: ' + data.message);
     }
@@ -204,6 +228,14 @@ function updateUsersList() {
         userItem.appendChild(statusDot);
         userItem.appendChild(userName);
         
+        // Добавляем бейдж непрочитанных сообщений
+        if (unreadMessages[user] && unreadMessages[user] > 0) {
+            const badge = document.createElement('div');
+            badge.className = 'unread-badge';
+            badge.textContent = unreadMessages[user];
+            userItem.appendChild(badge);
+        }
+        
         userItem.addEventListener('click', () => {
             openPrivateChat(user);
             // Закрываем боковую панель на мобильных
@@ -226,6 +258,9 @@ function openPrivateChat(username) {
     backBtn.style.display = 'flex';
     chatTitle.textContent = `💬 ${username}`;
     messagesContainer.innerHTML = '';
+    
+    // Очищаем непрочитанные сообщения
+    unreadMessages[username] = 0;
     updateUsersList();
     
     // Загружаем историю сообщений
@@ -525,6 +560,25 @@ socket.on('private-message', (data) => {
     // Если это сообщение от текущего чата или от нас
     if (data.from === currentChatUser || data.to === currentChatUser) {
         displayMessage(data);
+    } else if (data.from !== currentUsername) {
+        // Если это входящее сообщение от другого пользователя
+        // Увеличиваем счетчик непрочитанных
+        if (!unreadMessages[data.from]) {
+            unreadMessages[data.from] = 0;
+        }
+        unreadMessages[data.from]++;
+        updateUsersList();
+        
+        // Воспроизводим звук
+        playNotificationSound();
+        
+        // Показываем уведомление браузера
+        if ('Notification' in window && Notification.permission === 'granted') {
+            new Notification(`Сообщение от ${data.from}`, {
+                body: data.message || 'Отправил файл',
+                icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y="75" font-size="75">👥</text></svg>'
+            });
+        }
     }
 });
 
