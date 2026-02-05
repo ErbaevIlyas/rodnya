@@ -47,8 +47,6 @@ async function initializeDB() {
                 caption TEXT,
                 type VARCHAR(50) DEFAULT 'text',
                 is_general INTEGER DEFAULT 0,
-                is_read INTEGER DEFAULT 0,
-                reply_to_id INTEGER,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         `);
@@ -98,7 +96,7 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// Ping endpoint - чтобы сервер не засыпал на Render
+// Ping endpoint
 app.get('/ping', (req, res) => {
     res.json({ status: 'ok' });
 });
@@ -255,17 +253,8 @@ io.on('connection', (socket) => {
                 mimetype: msg.mimetype,
                 caption: msg.caption,
                 timestamp: msg.created_at,
-                type: msg.type,
-                isRead: msg.is_read,
-                replyToId: msg.reply_to_id
+                type: msg.type
             }));
-            
-            // Отмечаем входящие сообщения как прочитанные
-            await pool.query(
-                `UPDATE messages SET is_read = 1 
-                 WHERE to_user = $1 AND from_user = $2 AND is_general = 0`,
-                [currentUser, otherUser]
-            );
             
             socket.emit('private-messages-loaded', messages);
         } catch (error) {
@@ -306,9 +295,9 @@ io.on('connection', (socket) => {
             if (!username) return;
             
             const result = await pool.query(
-                `INSERT INTO messages (from_user, to_user, message, type, is_general, is_read, reply_to_id) 
-                 VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
-                [username, 'general', data.message, 'text', 1, 1, data.replyToId || null]
+                `INSERT INTO messages (from_user, to_user, message, type, is_general) 
+                 VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+                [username, 'general', data.message, 'text', 1]
             );
             
             const formattedMessage = {
@@ -316,8 +305,7 @@ io.on('connection', (socket) => {
                 username: username,
                 message: data.message,
                 timestamp: new Date().toLocaleString('ru-RU'),
-                type: 'text',
-                replyToId: data.replyToId || null
+                type: 'text'
             };
             
             io.to('general').emit('new-message', formattedMessage);
@@ -372,12 +360,12 @@ io.on('connection', (socket) => {
             const senderUsername = socket.username;
             if (!senderUsername) return;
             
-            const { recipientUsername, message, replyToId } = data;
+            const { recipientUsername, message } = data;
             
             const result = await pool.query(
-                `INSERT INTO messages (from_user, to_user, message, type, is_general, is_read, reply_to_id) 
-                 VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
-                [senderUsername, recipientUsername, message, 'text', 0, 0, replyToId || null]
+                `INSERT INTO messages (from_user, to_user, message, type, is_general) 
+                 VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+                [senderUsername, recipientUsername, message, 'text', 0]
             );
             
             let recipientSocketId = null;
@@ -394,9 +382,7 @@ io.on('connection', (socket) => {
                 to: recipientUsername,
                 message: message,
                 timestamp: new Date().toLocaleString('ru-RU'),
-                type: 'text',
-                isRead: 0,
-                replyToId: replyToId || null
+                type: 'text'
             };
             
             socket.emit('private-message', formattedMessage);

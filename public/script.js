@@ -72,19 +72,16 @@ const toggleSidebarBtn = document.getElementById('toggle-sidebar-btn');
 
 // Переменные
 let currentUsername = '';
-let currentChatUser = null; // Для личных сообщений
+let currentChatUser = null;
 let isRecording = false;
 let mediaRecorder;
 let recordedChunks = [];
 let currentPreviewFile = null;
 let allUsers = [];
-let unreadMessages = {}; // {username: count}
-let replyToMessage = null; // Для reply функционала
-let allMessages = {}; // Кеш всех сообщений для reply
+let unreadMessages = {};
 
 // Функция для звукового уведомления
 function playNotificationSound() {
-    // Создаем простой звук через Web Audio API
     const audioContext = new (window.AudioContext || window.webkitAudioContext)();
     const oscillator = audioContext.createOscillator();
     const gainNode = audioContext.createGain();
@@ -100,16 +97,15 @@ function playNotificationSound() {
     
     oscillator.start(audioContext.currentTime);
     oscillator.stop(audioContext.currentTime + 0.5);
-}// Инициализация
+}
+
+// Инициализация
 document.addEventListener('DOMContentLoaded', () => {
-    // Проверяем есть ли сохраненная сессия в cookies
     const savedUsername = getCookie('username');
     const savedPassword = getCookie('password');
     
     if (savedUsername && savedPassword) {
-        // Устанавливаем currentUsername сразу
         currentUsername = savedUsername;
-        // Ждем подключения socket и затем входим
         if (socket.connected) {
             socket.emit('login', { username: savedUsername, password: savedPassword });
         } else {
@@ -207,19 +203,15 @@ socket.on('register-response', (data) => {
 
 socket.on('login-response', (data) => {
     if (data.success) {
-        // Сохраняем учетные данные при успешном входе
         if (loginUsernameInput.value.trim()) {
             currentUsername = loginUsernameInput.value.trim();
         }
-        // currentUsername уже установлен либо из input, либо из cookies
         
         let password = loginPasswordInput.value.trim();
         if (!password) {
-            // Если пароль не введен (автозаход), берем из cookies
             password = getCookie('password');
         }
         
-        // Сохраняем в cookies на 30 дней
         setCookie('username', currentUsername, 30);
         if (password) {
             setCookie('password', password, 30);
@@ -230,11 +222,11 @@ socket.on('login-response', (data) => {
         mainContainer.style.display = 'flex';
         messageInput.focus();
         
-        // Очищаем форму
         loginUsernameInput.value = '';
         loginPasswordInput.value = '';
         
-        // Запрашиваем разрешение на уведомления
+        socket.emit('load-general-chat', {});
+        
         if ('Notification' in window && Notification.permission === 'default') {
             Notification.requestPermission();
         }
@@ -255,7 +247,6 @@ socket.on('online-users', (onlineUsers) => {
 
 // Выход
 logoutBtn.addEventListener('click', () => {
-    // Удаляем сохраненные данные из cookies
     deleteCookie('username');
     deleteCookie('password');
     
@@ -287,7 +278,7 @@ function updateUsersList() {
     usersList.innerHTML = '';
     
     allUsers.forEach(user => {
-        if (user === currentUsername) return; // Не показываем себя
+        if (user === currentUsername) return;
         
         const userItem = document.createElement('div');
         userItem.className = 'user-item';
@@ -302,7 +293,6 @@ function updateUsersList() {
         userItem.appendChild(statusDot);
         userItem.appendChild(userName);
         
-        // Добавляем бейдж непрочитанных сообщений
         if (unreadMessages[user] && unreadMessages[user] > 0) {
             const badge = document.createElement('div');
             badge.className = 'unread-badge';
@@ -312,7 +302,6 @@ function updateUsersList() {
         
         userItem.addEventListener('click', () => {
             openPrivateChat(user);
-            // Закрываем боковую панель на мобильных
             const sidebar = document.querySelector('.sidebar');
             if (window.innerWidth <= 768) {
                 sidebar.classList.remove('active');
@@ -333,22 +322,9 @@ function openPrivateChat(username) {
     chatTitle.textContent = `💬 ${username}`;
     messagesContainer.innerHTML = '';
     
-    // Очищаем непрочитанные сообщения
     unreadMessages[username] = 0;
     updateUsersList();
     
-    // Подсвечиваем текущего пользователя
-    document.querySelectorAll('.user-item').forEach(item => {
-        item.classList.remove('private-chat');
-    });
-    const userItem = Array.from(document.querySelectorAll('.user-item')).find(item => 
-        item.textContent.includes(username)
-    );
-    if (userItem) {
-        userItem.classList.add('private-chat');
-    }
-    
-    // Загружаем историю сообщений
     socket.emit('load-private-messages', { username: username });
     
     messageInput.focus();
@@ -369,20 +345,17 @@ function backToGeneralChat() {
         </div>
     `;
     
-    // Убираем подсветку со всех пользователей
     document.querySelectorAll('.user-item').forEach(item => {
         item.classList.remove('private-chat');
     });
     
     updateUsersList();
     
-    // Запрашиваем историю общего чата у сервера
     socket.emit('load-general-chat', {});
     
-    messageInput.focus();
+    messageInput.blur();
 }
 
-// Отправка сообщения
 // Отправка сообщения
 function sendMessage() {
     const message = messageInput.value.trim();
@@ -391,18 +364,15 @@ function sendMessage() {
     if (currentChatUser) {
         socket.emit('send-private-message', {
             recipientUsername: currentChatUser,
-            message: message,
-            replyToId: replyToMessage
+            message: message
         });
     } else {
         socket.emit('send-message', {
-            message: message,
-            replyToId: replyToMessage
+            message: message
         });
     }
     
     messageInput.value = '';
-    cancelReply();
     removeWelcomeMessage();
 }
 
@@ -464,10 +434,6 @@ fileUploadArea.addEventListener('drop', (e) => {
     handleFiles(files);
 });
 
-fileInput.addEventListener('change', (e) => {
-    handleFiles(e.target.files);
-});
-
 // Обработка файлов
 function handleFiles(files) {
     Array.from(files).forEach(file => {
@@ -505,7 +471,6 @@ function showVideoPreview(file) {
         previewImage.src = e.target.result;
         previewImage.style.display = 'none';
         
-        // Создаем видео элемент
         const videoElement = document.createElement('video');
         videoElement.src = e.target.result;
         videoElement.style.maxWidth = '100%';
@@ -562,7 +527,6 @@ async function uploadFile(file, caption = '') {
         
         if (response.ok) {
             if (currentChatUser) {
-                // Приватный файл
                 socket.emit('send-private-file', {
                     recipientUsername: currentChatUser,
                     filename: result.filename,
@@ -572,7 +536,6 @@ async function uploadFile(file, caption = '') {
                     caption: caption
                 });
             } else {
-                // Файл в общий чат
                 socket.emit('send-file', {
                     filename: result.filename,
                     originalname: result.originalname,
@@ -596,14 +559,12 @@ emojiBtn.addEventListener('click', () => {
     emojiPicker.classList.toggle('active');
 });
 
-// Закрытие эмодзи при клике вне
 document.addEventListener('click', (e) => {
     if (!emojiBtn.contains(e.target) && !emojiPicker.contains(e.target)) {
         emojiPicker.classList.remove('active');
     }
 });
 
-// Выбор эмодзи
 document.querySelectorAll('.emoji').forEach(emoji => {
     emoji.addEventListener('click', () => {
         messageInput.value += emoji.textContent;
@@ -709,7 +670,7 @@ function showVoicePreview(blob) {
 
 // Socket события - Сообщения
 socket.on('new-message', (data) => {
-    if (!currentChatUser) { // Показываем только если в общем чате
+    if (!currentChatUser) {
         displayMessage(data);
     }
 });
@@ -725,33 +686,21 @@ socket.on('private-messages-loaded', (loadedMessages) => {
 });
 
 socket.on('private-message', (data) => {
-    console.log('Получено приватное сообщение:', data);
-    console.log('currentChatUser:', currentChatUser);
-    console.log('currentUsername:', currentUsername);
-    
-    // Если это сообщение от текущего чата или от нас
     if (data.from === currentChatUser || data.to === currentChatUser) {
-        console.log('Показываем сообщение в чате');
         displayMessage(data);
     } else if (data.from !== currentUsername) {
-        console.log('Входящее сообщение, добавляем в непрочитанные');
-        // Если это входящее сообщение от другого пользователя
-        // Увеличиваем счетчик непрочитанных
         if (!unreadMessages[data.from]) {
             unreadMessages[data.from] = 0;
         }
         unreadMessages[data.from]++;
-        console.log('Непрочитанные:', unreadMessages);
         updateUsersList();
         
-        // Воспроизводим звук
         try {
             playNotificationSound();
         } catch (e) {
             console.log('Ошибка звука:', e);
         }
         
-        // Показываем уведомление браузера
         if ('Notification' in window && Notification.permission === 'granted') {
             new Notification(`Сообщение от ${data.from}`, {
                 body: data.message || 'Отправил файл',
@@ -774,67 +723,34 @@ function displayMessage(data) {
     messageDiv.className = 'message';
     messageDiv.id = `msg-${data.id}`;
     
-    // Определяем свое ли это сообщение
     const isOwn = data.username === currentUsername || data.from === currentUsername;
     messageDiv.classList.add(isOwn ? 'own' : 'other');
     
-    // Сохраняем сообщение в кеш для reply
-    allMessages[data.id] = data;
-    
-    let deleteBtn = '';
-    if (isOwn) {
-        deleteBtn = `<button class="delete-btn" onclick="deleteMessage('${data.id}')">Удалить</button>`;
-    }
-    
     const senderName = data.username || data.from;
     
-    // Галочки для приватных сообщений
-    let readStatus = '';
-    if (isOwn && !currentChatUser) {
-        // Только в общем чате показываем галочки
-        readStatus = data.isRead ? '✓✓' : '✓';
-    }
-    
-    // Reply блок
-    let replyBlock = '';
-    if (data.replyToId && allMessages[data.replyToId]) {
-        const repliedMsg = allMessages[data.replyToId];
-        const repliedSender = repliedMsg.username || repliedMsg.from;
-        replyBlock = `<div class="reply-block">↳ <strong>${repliedSender}:</strong> ${repliedMsg.message?.substring(0, 50) || 'Файл'}</div>`;
-    }
-    
     if (data.type === 'file') {
-        messageDiv.classList.add('file-message');
         let captionHtml = '';
         if (data.caption) {
             captionHtml = `<div class="message-caption">"${data.caption}"</div>`;
         }
         
         messageDiv.innerHTML = `
-            ${deleteBtn}
             <div class="message-header">
-                <span class="username clickable" onclick="openChatWithUser('${senderName}')">${senderName}</span>
+                <span class="username">${senderName}</span>
                 <span class="timestamp">${data.timestamp}</span>
-                <span class="read-status">${readStatus}</span>
             </div>
-            ${replyBlock}
             <div class="message-content">
                 ${getMediaPreview(data.url, data.mimetype, data.originalname)}
                 ${captionHtml}
             </div>
-            <button class="reply-btn" onclick="setReplyTo('${data.id}', '${senderName}')">Ответить</button>
         `;
     } else {
         messageDiv.innerHTML = `
-            ${deleteBtn}
             <div class="message-header">
-                <span class="username clickable" onclick="openChatWithUser('${senderName}')">${senderName}</span>
+                <span class="username">${senderName}</span>
                 <span class="timestamp">${data.timestamp}</span>
-                <span class="read-status">${readStatus}</span>
             </div>
-            ${replyBlock}
-            <div class="message-content">${data.message}</div>
-            <button class="reply-btn" onclick="setReplyTo('${data.id}', '${senderName}')">Ответить</button>
+            <div class="message-bubble">${data.message}</div>
         `;
     }
     
@@ -861,14 +777,6 @@ function removeWelcomeMessage() {
     }
 }
 
-// Получение иконки файла
-function getFileIcon(mimetype) {
-    if (mimetype.startsWith('image/')) return 'fa-image';
-    if (mimetype.startsWith('video/')) return 'fa-video';
-    if (mimetype.startsWith('audio/')) return 'fa-music';
-    return 'fa-file';
-}
-
 // Предварительный просмотр медиа
 function getMediaPreview(url, mimetype, filename) {
     if (mimetype.startsWith('image/')) {
@@ -884,48 +792,4 @@ function getMediaPreview(url, mimetype, filename) {
     }
     
     return `<a href="${url}" target="_blank" class="file-link">Скачать файл</a>`;
-}
-
-
-// Reply функционал
-function setReplyTo(messageId, senderName) {
-    replyToMessage = messageId;
-    const msg = allMessages[messageId];
-    const preview = msg.message?.substring(0, 50) || 'Файл';
-    
-    const replyIndicator = document.getElementById('reply-indicator') || createReplyIndicator();
-    replyIndicator.innerHTML = `↳ Ответ на <strong>${senderName}:</strong> ${preview} <button onclick="cancelReply()" style="margin-left: 10px;">✕</button>`;
-    replyIndicator.style.display = 'block';
-    messageInput.focus();
-}
-
-function cancelReply() {
-    replyToMessage = null;
-    const replyIndicator = document.getElementById('reply-indicator');
-    if (replyIndicator) {
-        replyIndicator.style.display = 'none';
-    }
-}
-
-function createReplyIndicator() {
-    const indicator = document.createElement('div');
-    indicator.id = 'reply-indicator';
-    indicator.style.cssText = 'padding: 8px 12px; background: #f0f0f0; border-left: 3px solid #667eea; margin: 8px 12px 0; font-size: 14px; display: none;';
-    const inputContainer = document.querySelector('.message-input-container');
-    inputContainer.insertBefore(indicator, inputContainer.firstChild);
-    return indicator;
-}
-
-// Открытие чата с пользователем по клику на имя
-function openChatWithUser(username) {
-    if (username === currentUsername) return;
-    if (currentChatUser === username) return;
-    
-    openPrivateChat(username);
-    
-    // Закрываем боковую панель на мобильных
-    const sidebar = document.querySelector('.sidebar');
-    if (sidebar && sidebar.classList.contains('active')) {
-        sidebar.classList.remove('active');
-    }
 }
