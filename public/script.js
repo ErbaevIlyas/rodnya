@@ -1,6 +1,11 @@
 // Подключение к Socket.IO
 const socket = io();
 
+// Пинг сервера каждые 10 минут, чтобы он не засыпал на Render
+setInterval(() => {
+  fetch('/ping').catch(() => {});
+}, 10 * 60 * 1000);
+
 // Элементы DOM - Авторизация
 const authModal = document.getElementById('auth-modal');
 const loginForm = document.getElementById('login-form');

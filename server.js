@@ -96,6 +96,11 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
+// Ping endpoint - чтобы сервер не засыпал на Render
+app.get('/ping', (req, res) => {
+    res.json({ status: 'ok' });
+});
+
 // Загрузка файлов
 app.post('/upload', upload.single('file'), (req, res) => {
     if (!req.file) {
