@@ -557,20 +557,31 @@ socket.on('private-messages-loaded', (loadedMessages) => {
 });
 
 socket.on('private-message', (data) => {
+    console.log('Получено приватное сообщение:', data);
+    console.log('currentChatUser:', currentChatUser);
+    console.log('currentUsername:', currentUsername);
+    
     // Если это сообщение от текущего чата или от нас
     if (data.from === currentChatUser || data.to === currentChatUser) {
+        console.log('Показываем сообщение в чате');
         displayMessage(data);
     } else if (data.from !== currentUsername) {
+        console.log('Входящее сообщение, добавляем в непрочитанные');
         // Если это входящее сообщение от другого пользователя
         // Увеличиваем счетчик непрочитанных
         if (!unreadMessages[data.from]) {
             unreadMessages[data.from] = 0;
         }
         unreadMessages[data.from]++;
+        console.log('Непрочитанные:', unreadMessages);
         updateUsersList();
         
         // Воспроизводим звук
-        playNotificationSound();
+        try {
+            playNotificationSound();
+        } catch (e) {
+            console.log('Ошибка звука:', e);
+        }
         
         // Показываем уведомление браузера
         if ('Notification' in window && Notification.permission === 'granted') {
