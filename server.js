@@ -5,17 +5,11 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const { Pool } = require('pg');
-const Groq = require('groq-sdk');
 require('dotenv').config();
 
 const app = express();
 const server = http.createServer(app);
 const io = socketIo(server);
-
-// Groq клиент
-const groq = new Groq({
-    apiKey: process.env.GROQ_API_KEY
-});
 
 // PostgreSQL подключение
 const pool = new Pool({
@@ -422,51 +416,6 @@ io.on('connection', (socket) => {
             
             if (recipientSocketId) {
                 io.to(recipientSocketId).emit('private-message', formattedMessage);
-            }
-            
-            // Если сообщение отправлено GPT - отправляем ответ от Groq
-            if (recipientUsername === 'GPT') {
-                setTimeout(async () => {
-                    try {
-                        const completion = await groq.chat.completions.create({
-                            model: 'mixtral-8x7b-32768',
-                            messages: [{ role: 'user', content: message }],
-                            max_tokens: 1024
-                        });
-                        
-                        const gptResponse = {
-                            id: (Math.random() * 1000000).toString(),
-                            from: 'GPT',
-                            to: senderUsername,
-                            message: completion.choices[0].message.content,
-                            timestamp: new Date().toLocaleString('ru-RU'),
-                            type: 'text',
-                            readStatus: 2
-                        };
-                        
-                        // Сохраняем в БД
-                        await pool.query(
-                            `INSERT INTO messages (from_user, to_user, message, type, is_general, read_status) 
-                             VALUES ($1, $2, $3, $4, $5, $6)`,
-                            ['GPT', senderUsername, gptResponse.message, 'text', 0, 2]
-                        );
-                        
-                        // Отправляем ответ
-                        io.to(socket.id).emit('private-message', gptResponse);
-                    } catch (error) {
-                        console.error('Ошибка Groq:', error);
-                        const errorResponse = {
-                            id: (Math.random() * 1000000).toString(),
-                            from: 'GPT',
-                            to: senderUsername,
-                            message: 'Извини, произошла ошибка. Попробуй ещё раз.',
-                            timestamp: new Date().toLocaleString('ru-RU'),
-                            type: 'text',
-                            readStatus: 2
-                        };
-                        io.to(socket.id).emit('private-message', errorResponse);
-                    }
-                }, 1000);
             }
         } catch (error) {
             console.error('Ошибка отправки приватного сообщения:', error);
