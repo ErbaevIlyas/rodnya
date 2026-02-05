@@ -393,7 +393,9 @@ function backToGeneralChat() {
     
     socket.emit('load-general-chat', {});
     
+    // Убираем фокус с input и закрываем клавиатуру
     messageInput.blur();
+    document.activeElement.blur();
 }
 
 // Отправка сообщения
@@ -808,9 +810,9 @@ function displayMessage(data) {
         });
         
         // Долгое нажатие (телефон)
-        messageDiv.addEventListener('touchstart', () => {
+        messageDiv.addEventListener('touchstart', (e) => {
             longPressTimer = setTimeout(() => {
-                const touch = event.touches[0];
+                const touch = e.touches[0];
                 showContextMenu(data.id, touch.clientX, touch.clientY);
             }, 500);
         });
@@ -849,15 +851,15 @@ function removeWelcomeMessage() {
 // Предварительный просмотр медиа
 function getMediaPreview(url, mimetype, filename) {
     if (mimetype.startsWith('image/')) {
-        return `<img src="${url}" alt="${filename}" class="media-preview" onclick="window.open('${url}', '_blank')">`;
+        return `<img src="${url}" alt="${filename}" class="message-image" onclick="window.open('${url}', '_blank')">`;
     }
     
     if (mimetype.startsWith('video/')) {
-        return `<video src="${url}" controls class="media-preview"></video>`;
+        return `<video src="${url}" controls class="message-video"></video>`;
     }
     
     if (mimetype.startsWith('audio/')) {
-        return `<audio src="${url}" controls style="width: 100%; margin-top: 0.5rem;"></audio>`;
+        return `<audio src="${url}" controls class="message-audio"></audio>`;
     }
     
     return `<a href="${url}" target="_blank" class="file-link">Скачать файл</a>`;

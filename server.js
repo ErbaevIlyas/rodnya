@@ -83,11 +83,12 @@ const upload = multer({
 app.use(express.static('public'));
 app.use('/uploads', express.static('uploads'));
 
-// Отключаем кеш
+// Отключаем кеш для всех файлов
 app.use((req, res, next) => {
-    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0');
     res.set('Pragma', 'no-cache');
     res.set('Expires', '0');
+    res.set('ETag', 'W/"' + Date.now() + '"');
     next();
 });
 
