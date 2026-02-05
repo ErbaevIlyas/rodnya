@@ -266,6 +266,15 @@ body {
     flex-shrink: 0;
 }
 
+.user-status {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: #ccc;
+    flex-shrink: 0;
+    border: 2px solid white;
+}
+
 .user-name {
     flex: 1;
     font-size: 14px;

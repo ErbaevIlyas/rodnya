@@ -219,7 +219,7 @@ io.on('connection', (socket) => {
             }));
             socket.emit('load-general-messages', messages);
             
-            io.to('general').emit('user-status', { username: username, status: 'online' });
+            io.to('general').emit('user-status-changed', { username: username, status: 'online' });
             
         } catch (error) {
             console.error('Ошибка входа:', error);
@@ -452,7 +452,7 @@ io.on('connection', (socket) => {
             const onlineUsers = Array.from(connectedUsers.values()).map(u => u.username);
             io.emit('online-users', onlineUsers);
             
-            io.to('general').emit('user-status', { 
+            io.to('general').emit('user-status-changed', { 
                 username: username, 
                 status: 'offline' 
             });

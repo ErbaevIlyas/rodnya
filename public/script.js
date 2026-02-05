@@ -6,7 +6,7 @@ setInterval(() => {
   fetch('/ping').catch(() => {});
 }, 10 * 60 * 1000);
 
-// ===== ФУНКЦИИ ДЛЯ РАБОТЫ С COOKIES =====
+// ===== ФУНКЦИИ ДЛЯ РАБОТЫ С COOKIES И LOCALSTORAGE =====
 function setCookie(name, value, days = 30) {
     const date = new Date();
     date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
@@ -28,6 +28,39 @@ function getCookie(name) {
 
 function deleteCookie(name) {
     setCookie(name, "", -1);
+}
+
+// LocalStorage функции (более надёжно на мобильных)
+function saveCredentials(username, password) {
+    try {
+        localStorage.setItem('rodnya_username', username);
+        localStorage.setItem('rodnya_password', password);
+        setCookie('username', username, 30);
+        setCookie('password', password, 30);
+    } catch (e) {
+        console.log('Ошибка сохранения:', e);
+    }
+}
+
+function getCredentials() {
+    try {
+        const username = localStorage.getItem('rodnya_username') || getCookie('username');
+        const password = localStorage.getItem('rodnya_password') || getCookie('password');
+        return { username, password };
+    } catch (e) {
+        return { username: null, password: null };
+    }
+}
+
+function clearCredentials() {
+    try {
+        localStorage.removeItem('rodnya_username');
+        localStorage.removeItem('rodnya_password');
+        deleteCookie('username');
+        deleteCookie('password');
+    } catch (e) {
+        console.log('Ошибка удаления:', e);
+    }
 }
 
 // Элементы DOM - Авторизация
@@ -80,6 +113,7 @@ let mediaRecorder;
 let recordedChunks = [];
 let currentPreviewFile = null;
 let allUsers = [];
+let onlineUsers = [];
 let unreadMessages = {};
 
 // Функция для звукового уведомления
@@ -144,8 +178,7 @@ document.addEventListener('click', (e) => {
 
 // Инициализация
 document.addEventListener('DOMContentLoaded', () => {
-    const savedUsername = getCookie('username');
-    const savedPassword = getCookie('password');
+    const { username: savedUsername, password: savedPassword } = getCredentials();
     
     if (savedUsername && savedPassword) {
         currentUsername = savedUsername;
@@ -251,13 +284,10 @@ socket.on('login-response', (data) => {
             currentUsername = loginUsernameInput.value.trim();
             const password = loginPasswordInput.value.trim();
             
-            // Сохраняем в cookies только при ручном входе
-            setCookie('username', currentUsername, 30);
-            if (password) {
-                setCookie('password', password, 30);
-            }
+            // Сохраняем в localStorage и cookies
+            saveCredentials(currentUsername, password);
         }
-        // Если это автозаход, cookies уже установлены
+        // Если это автозаход, credentials уже установлены
         
         currentUserSpan.textContent = `👤 ${currentUsername}`;
         authModal.style.display = 'none';
@@ -282,15 +312,15 @@ socket.on('users-list', (users) => {
     updateUsersList();
 });
 
-socket.on('online-users', (onlineUsers) => {
-    onlineCount.textContent = onlineUsers.length;
+socket.on('online-users', (users) => {
+    onlineUsers = users;
+    onlineCount.textContent = users.length;
     updateUsersList();
 });
 
 // Выход
 logoutBtn.addEventListener('click', () => {
-    deleteCookie('username');
-    deleteCookie('password');
+    clearCredentials();
     
     currentUsername = '';
     currentChatUser = null;
@@ -328,6 +358,9 @@ function updateUsersList() {
         
         const statusDot = document.createElement('div');
         statusDot.className = 'user-status';
+        const isOnline = onlineUsers.includes(user);
+        statusDot.style.background = isOnline ? '#4caf50' : '#ccc';
+        statusDot.title = isOnline ? 'Онлайн' : 'Офлайн';
         
         const userName = document.createElement('span');
         userName.textContent = user;
@@ -361,7 +394,9 @@ function openPrivateChat(username) {
     const chatTitle = document.getElementById('chat-title');
     
     backBtn.style.display = 'flex';
-    chatTitle.textContent = `💬 ${username}`;
+    const isOnline = onlineUsers.includes(username);
+    const statusIcon = isOnline ? '🟢' : '⚫';
+    chatTitle.textContent = `💬 ${username} ${statusIcon}`;
     messagesContainer.innerHTML = '';
     
     unreadMessages[username] = 0;
@@ -441,7 +476,8 @@ videoBtn.addEventListener('click', () => {
 });
 
 // Меню прикрепления
-attachBtn.addEventListener('click', () => {
+attachBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
     attachMenu.classList.toggle('active');
 });
 
@@ -638,8 +674,16 @@ voiceBtn.addEventListener('click', toggleRecording);
 async function toggleRecording() {
     if (!isRecording) {
         try {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            mediaRecorder = new MediaRecorder(stream);
+            const stream = await navigator.mediaDevices.getUserMedia({ 
+                audio: {
+                    echoCancellation: true,
+                    noiseSuppression: true,
+                    autoGainControl: true
+                }
+            });
+            mediaRecorder = new MediaRecorder(stream, {
+                mimeType: 'audio/webm'
+            });
             recordedChunks = [];
             
             mediaRecorder.ondataavailable = (e) => {
@@ -661,6 +705,7 @@ async function toggleRecording() {
             voiceBtn.innerHTML = '<i class="fas fa-stop"></i>';
             
         } catch (error) {
+            console.error('Ошибка микрофона:', error);
             alert('Ошибка доступа к микрофону: ' + error.message);
         }
     } else {
@@ -774,6 +819,16 @@ socket.on('message-deleted', (data) => {
     if (messageDiv) {
         messageDiv.remove();
     }
+});
+
+socket.on('user-status-changed', (data) => {
+    const chatTitle = document.getElementById('chat-title');
+    if (currentChatUser === data.username) {
+        const isOnline = data.status === 'online';
+        const statusIcon = isOnline ? '🟢' : '⚫';
+        chatTitle.textContent = `💬 ${data.username} ${statusIcon}`;
+    }
+    updateUsersList();
 });
 
 // Отображение сообщения
