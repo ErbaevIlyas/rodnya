@@ -73,6 +73,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const savedPassword = localStorage.getItem('password');
     
     if (savedUsername && savedPassword) {
+        // Устанавливаем currentUsername сразу
+        currentUsername = savedUsername;
         // Автоматически входим
         socket.emit('login', { username: savedUsername, password: savedPassword });
     } else {
@@ -165,10 +167,8 @@ socket.on('register-response', (data) => {
 
 socket.on('login-response', (data) => {
     if (data.success) {
-        // Если это автовход, берем из localStorage
-        if (!currentUsername) {
-            currentUsername = localStorage.getItem('username');
-        } else {
+        // Если это ручной вход, сохраняем
+        if (!localStorage.getItem('username')) {
             currentUsername = loginUsernameInput.value.trim();
             const password = loginPasswordInput.value.trim();
             localStorage.setItem('username', currentUsername);
