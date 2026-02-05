@@ -9,6 +9,11 @@ input, textarea, select {
     font-size: 16px !important;
 }
 
+/* Отключаем приближение двумя пальцами */
+html {
+    touch-action: manipulation;
+}
+
 html, body {
     width: 100%;
     height: 100%;
@@ -405,6 +410,7 @@ body {
     padding: 0 4px;
     display: flex;
     gap: 6px;
+    align-items: center;
 }
 
 .username {
@@ -437,13 +443,13 @@ body {
 .message-image {
     max-width: 100%;
     border-radius: 6px;
-    max-height: 250px;
+    max-height: 200px;
 }
 
 .message-video {
     max-width: 100%;
     border-radius: 6px;
-    max-height: 250px;
+    max-height: 200px;
 }
 
 .message-audio {
@@ -713,6 +719,44 @@ body {
 /* Скрытые кнопки на мобильных */
 .delete-btn, .reply-btn {
     display: none;
+}
+
+/* Контекстное меню */
+.context-menu {
+    position: fixed;
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    z-index: 300;
+    min-width: 140px;
+    overflow: hidden;
+}
+
+.context-menu button {
+    display: block;
+    width: 100%;
+    padding: 10px 14px;
+    border: none;
+    background: none;
+    text-align: left;
+    cursor: pointer;
+    font-size: 13px;
+    color: #333;
+    border-bottom: 1px solid #f0f0f0;
+    transition: background 0.2s;
+}
+
+.context-menu button:last-child {
+    border-bottom: none;
+}
+
+.context-menu button:hover {
+    background: #f5f5f5;
+}
+
+.context-menu button:active {
+    background: #f0f0f0;
 }
 
 /* Контекстное меню */

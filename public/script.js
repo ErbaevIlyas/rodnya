@@ -99,6 +99,47 @@ function playNotificationSound() {
     oscillator.stop(audioContext.currentTime + 0.5);
 }
 
+// Форматирование времени
+function formatTime(timestamp) {
+    const date = new Date(timestamp);
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const year = date.getFullYear();
+    return `${hours}:${minutes} ${day}.${month}.${year}`;
+}
+
+// Контекстное меню
+let contextMenu = null;
+let longPressTimer = null;
+
+function showContextMenu(messageId, x, y) {
+    if (contextMenu) contextMenu.remove();
+    
+    const menu = document.createElement('div');
+    menu.className = 'context-menu';
+    menu.style.left = x + 'px';
+    menu.style.top = y + 'px';
+    menu.innerHTML = `<button onclick="deleteMessage('${messageId}'); hideContextMenu()">🗑 Удалить</button>`;
+    
+    document.body.appendChild(menu);
+    contextMenu = menu;
+}
+
+function hideContextMenu() {
+    if (contextMenu) {
+        contextMenu.remove();
+        contextMenu = null;
+    }
+}
+
+document.addEventListener('click', (e) => {
+    if (contextMenu && !contextMenu.contains(e.target)) {
+        hideContextMenu();
+    }
+});
+
 // Инициализация
 document.addEventListener('DOMContentLoaded', () => {
     const savedUsername = getCookie('username');
@@ -203,19 +244,18 @@ socket.on('register-response', (data) => {
 
 socket.on('login-response', (data) => {
     if (data.success) {
+        // Если это ручной вход (есть значение в input)
         if (loginUsernameInput.value.trim()) {
             currentUsername = loginUsernameInput.value.trim();
+            const password = loginPasswordInput.value.trim();
+            
+            // Сохраняем в cookies только при ручном входе
+            setCookie('username', currentUsername, 30);
+            if (password) {
+                setCookie('password', password, 30);
+            }
         }
-        
-        let password = loginPasswordInput.value.trim();
-        if (!password) {
-            password = getCookie('password');
-        }
-        
-        setCookie('username', currentUsername, 30);
-        if (password) {
-            setCookie('password', password, 30);
-        }
+        // Если это автозаход, cookies уже установлены
         
         currentUserSpan.textContent = `👤 ${currentUsername}`;
         authModal.style.display = 'none';
@@ -630,25 +670,27 @@ function showVoicePreview(blob) {
         justify-content: center;
         align-items: center;
         z-index: 2000;
+        padding: 20px;
     `;
     
     const content = document.createElement('div');
     content.style.cssText = `
         background: white;
-        padding: 2rem;
-        border-radius: 15px;
+        padding: 20px;
+        border-radius: 12px;
         text-align: center;
-        max-width: 300px;
+        max-width: 280px;
+        width: 100%;
     `;
     
     content.innerHTML = `
-        <h3>Голосовое сообщение</h3>
-        <audio controls style="width: 100%; margin: 1rem 0;">
+        <h3 style="margin-bottom: 15px; font-size: 16px; color: #333;">🎤 Голосовое сообщение</h3>
+        <audio controls style="width: 100%; margin-bottom: 15px; height: 32px;">
             <source src="${url}" type="audio/webm">
         </audio>
-        <div style="display: flex; gap: 1rem; margin-top: 1rem;">
-            <button id="cancel-voice" style="flex: 1; padding: 0.75rem; background: #6c757d; color: white; border: none; border-radius: 10px; cursor: pointer;">Отмена</button>
-            <button id="send-voice" style="flex: 1; padding: 0.75rem; background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); color: white; border: none; border-radius: 10px; cursor: pointer;">Отправить</button>
+        <div style="display: flex; gap: 10px;">
+            <button id="cancel-voice" style="flex: 1; padding: 10px; background: #f0f0f0; color: #333; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600;">Отмена</button>
+            <button id="send-voice" style="flex: 1; padding: 10px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600;">Отправить</button>
         </div>
     `;
     
@@ -727,6 +769,7 @@ function displayMessage(data) {
     messageDiv.classList.add(isOwn ? 'own' : 'other');
     
     const senderName = data.username || data.from;
+    const formattedTime = formatTime(data.timestamp);
     
     if (data.type === 'file') {
         let captionHtml = '';
@@ -737,7 +780,7 @@ function displayMessage(data) {
         messageDiv.innerHTML = `
             <div class="message-header">
                 <span class="username">${senderName}</span>
-                <span class="timestamp">${data.timestamp}</span>
+                <span class="timestamp">${formattedTime}</span>
             </div>
             <div class="message-content">
                 ${getMediaPreview(data.url, data.mimetype, data.originalname)}
@@ -748,13 +791,39 @@ function displayMessage(data) {
         messageDiv.innerHTML = `
             <div class="message-header">
                 <span class="username">${senderName}</span>
-                <span class="timestamp">${data.timestamp}</span>
+                <span class="timestamp">${formattedTime}</span>
             </div>
             <div class="message-bubble">${data.message}</div>
         `;
     }
     
     messagesContainer.appendChild(messageDiv);
+    
+    // Добавляем контекстное меню
+    if (isOwn) {
+        // Правая кнопка мыши (ПК)
+        messageDiv.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            showContextMenu(data.id, e.clientX, e.clientY);
+        });
+        
+        // Долгое нажатие (телефон)
+        messageDiv.addEventListener('touchstart', () => {
+            longPressTimer = setTimeout(() => {
+                const touch = event.touches[0];
+                showContextMenu(data.id, touch.clientX, touch.clientY);
+            }, 500);
+        });
+        
+        messageDiv.addEventListener('touchend', () => {
+            clearTimeout(longPressTimer);
+        });
+        
+        messageDiv.addEventListener('touchmove', () => {
+            clearTimeout(longPressTimer);
+        });
+    }
+    
     messagesContainer.scrollTop = messagesContainer.scrollHeight;
 }
 
