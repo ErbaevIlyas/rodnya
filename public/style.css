@@ -801,18 +801,18 @@ body {
 /* ===== МОБИЛЬНЫЕ СТИЛИ ===== */
 @media (max-width: 899px) {
     .control-btn {
-        min-width: 36px;
-        min-height: 36px;
-        padding: 6px;
-        font-size: 16px;
+        min-width: 40px;
+        min-height: 40px;
+        padding: 8px;
+        font-size: 20px;
     }
     
     .send-btn {
-        width: 36px;
-        height: 36px;
-        min-width: 36px;
-        min-height: 36px;
-        font-size: 14px;
+        width: 40px;
+        height: 40px;
+        min-width: 40px;
+        min-height: 40px;
+        font-size: 18px;
     }
     
     .input-area {
