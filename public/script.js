@@ -6,6 +6,30 @@ setInterval(() => {
   fetch('/ping').catch(() => {});
 }, 10 * 60 * 1000);
 
+// ===== ФУНКЦИИ ДЛЯ РАБОТЫ С COOKIES =====
+function setCookie(name, value, days = 30) {
+    const date = new Date();
+    date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
+    const expires = "expires=" + date.toUTCString();
+    document.cookie = name + "=" + encodeURIComponent(value) + ";" + expires + ";path=/;SameSite=Lax";
+}
+
+function getCookie(name) {
+    const nameEQ = name + "=";
+    const cookies = document.cookie.split(';');
+    for (let cookie of cookies) {
+        cookie = cookie.trim();
+        if (cookie.indexOf(nameEQ) === 0) {
+            return decodeURIComponent(cookie.substring(nameEQ.length));
+        }
+    }
+    return null;
+}
+
+function deleteCookie(name) {
+    setCookie(name, "", -1);
+}
+
 // Элементы DOM - Авторизация
 const authModal = document.getElementById('auth-modal');
 const loginForm = document.getElementById('login-form');
@@ -78,15 +102,21 @@ function playNotificationSound() {
     oscillator.stop(audioContext.currentTime + 0.5);
 }// Инициализация
 document.addEventListener('DOMContentLoaded', () => {
-    // Проверяем есть ли сохраненная сессия
-    const savedUsername = localStorage.getItem('username');
-    const savedPassword = localStorage.getItem('password');
+    // Проверяем есть ли сохраненная сессия в cookies
+    const savedUsername = getCookie('username');
+    const savedPassword = getCookie('password');
     
     if (savedUsername && savedPassword) {
         // Устанавливаем currentUsername сразу
         currentUsername = savedUsername;
-        // Автоматически входим
-        socket.emit('login', { username: savedUsername, password: savedPassword });
+        // Ждем подключения socket и затем входим
+        if (socket.connected) {
+            socket.emit('login', { username: savedUsername, password: savedPassword });
+        } else {
+            socket.once('connect', () => {
+                socket.emit('login', { username: savedUsername, password: savedPassword });
+            });
+        }
     } else {
         loginUsernameInput.focus();
     }
@@ -178,11 +208,18 @@ socket.on('register-response', (data) => {
 socket.on('login-response', (data) => {
     if (data.success) {
         // Сохраняем учетные данные при успешном входе
-        currentUsername = loginUsernameInput.value.trim() || currentUsername;
+        if (loginUsernameInput.value.trim()) {
+            currentUsername = loginUsernameInput.value.trim();
+        }
+        // currentUsername уже установлен либо из input, либо из cookies
+        
         const password = loginPasswordInput.value.trim();
         
-        localStorage.setItem('username', currentUsername);
-        localStorage.setItem('password', password);
+        // Сохраняем в cookies на 30 дней
+        setCookie('username', currentUsername, 30);
+        if (password) {
+            setCookie('password', password, 30);
+        }
         
         currentUserSpan.textContent = `👤 ${currentUsername}`;
         authModal.style.display = 'none';
@@ -214,15 +251,15 @@ socket.on('online-users', (onlineUsers) => {
 
 // Выход
 logoutBtn.addEventListener('click', () => {
-    // Удаляем сохраненные данные
-    localStorage.removeItem('username');
-    localStorage.removeItem('password');
+    // Удаляем сохраненные данные из cookies
+    deleteCookie('username');
+    deleteCookie('password');
     
     currentUsername = '';
     currentChatUser = null;
     authModal.style.display = 'flex';
     mainContainer.style.display = 'none';
-    messagesContainer.innerHTML = '<div class="welcome-message"><i class="fas fa-heart"></i><h2>Добро пожаловать в Родню!</h2><p>Общайтесь с близкими, делитесь моментами жизни</p></div>';
+    messagesContainer.innerHTML = '<div class="welcome-message"><i class="fas fa-heart"></i><h2>Добро пожаловать в Родню!</h2></div>';
     loginForm.style.display = 'block';
     registerForm.style.display = 'none';
     loginUsernameInput.value = '';
@@ -325,7 +362,6 @@ function backToGeneralChat() {
         <div class="welcome-message">
             <i class="fas fa-heart"></i>
             <h2>Добро пожаловать в Родню!</h2>
-            <p>Общайтесь с близкими, делитесь моментами жизни</p>
         </div>
     `;
     
@@ -343,26 +379,27 @@ function backToGeneralChat() {
 }
 
 // Отправка сообщения
+// Отправка сообщения
 function sendMessage() {
     const message = messageInput.value.trim();
+    if (!message) return;
     
-    if (message) {
-        if (currentChatUser) {
-            // Приватное сообщение
-            socket.emit('send-private-message', {
-                recipientUsername: currentChatUser,
-                message: message
-            });
-        } else {
-            // Общий чат
-            socket.emit('send-message', {
-                message: message
-            });
-        }
-        
-        messageInput.value = '';
-        removeWelcomeMessage();
+    if (currentChatUser) {
+        socket.emit('send-private-message', {
+            recipientUsername: currentChatUser,
+            message: message,
+            replyToId: replyToMessage
+        });
+    } else {
+        socket.emit('send-message', {
+            message: message,
+            replyToId: replyToMessage
+        });
     }
+    
+    messageInput.value = '';
+    cancelReply();
+    removeWelcomeMessage();
 }
 
 // Обработчики событий
@@ -887,28 +924,4 @@ function openChatWithUser(username) {
     if (sidebar && sidebar.classList.contains('active')) {
         sidebar.classList.remove('active');
     }
-}
-
-// Обновление функции sendMessage для отправки reply
-const originalSendMessage = sendMessage;
-function sendMessage() {
-    const message = messageInput.value.trim();
-    if (!message) return;
-    
-    if (currentChatUser) {
-        socket.emit('send-private-message', {
-            recipientUsername: currentChatUser,
-            message: message,
-            replyToId: replyToMessage
-        });
-    } else {
-        socket.emit('send-message', {
-            message: message,
-            replyToId: replyToMessage
-        });
-    }
-    
-    messageInput.value = '';
-    cancelReply();
-    removeWelcomeMessage();
 }
