@@ -552,8 +552,8 @@ body {
 
 /* Меню прикрепления */
 .attach-menu {
-    position: absolute;
-    bottom: 50px;
+    position: fixed;
+    bottom: 60px;
     left: 10px;
     background: white;
     border: 1px solid #ddd;

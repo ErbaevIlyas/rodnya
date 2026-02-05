@@ -350,33 +350,35 @@ function updateUsersList() {
     usersList.innerHTML = '';
     
     allUsers.forEach(user => {
-        if (user === currentUsername) return;
+        const username = typeof user === 'string' ? user : user.username;
+        if (username === currentUsername) return;
         
         const userItem = document.createElement('div');
         userItem.className = 'user-item';
-        if (user === currentChatUser) userItem.classList.add('active');
+        if (username === currentChatUser) userItem.classList.add('active');
         
         const statusDot = document.createElement('div');
         statusDot.className = 'user-status';
-        const isOnline = onlineUsers.includes(user);
+        
+        const isOnline = typeof user === 'string' ? onlineUsers.includes(user) : user.isOnline;
         statusDot.style.background = isOnline ? '#4caf50' : '#ccc';
         statusDot.title = isOnline ? 'Онлайн' : 'Офлайн';
         
         const userName = document.createElement('span');
-        userName.textContent = user;
+        userName.textContent = username;
         
         userItem.appendChild(statusDot);
         userItem.appendChild(userName);
         
-        if (unreadMessages[user] && unreadMessages[user] > 0) {
+        if (unreadMessages[username] && unreadMessages[username] > 0) {
             const badge = document.createElement('div');
             badge.className = 'unread-badge';
-            badge.textContent = unreadMessages[user];
+            badge.textContent = unreadMessages[username];
             userItem.appendChild(badge);
         }
         
         userItem.addEventListener('click', () => {
-            openPrivateChat(user);
+            openPrivateChat(username);
             const sidebar = document.querySelector('.sidebar');
             if (window.innerWidth <= 768) {
                 sidebar.classList.remove('active');
@@ -394,9 +396,34 @@ function openPrivateChat(username) {
     const chatTitle = document.getElementById('chat-title');
     
     backBtn.style.display = 'flex';
-    const isOnline = onlineUsers.includes(username);
-    const statusIcon = isOnline ? '🟢' : '⚫';
-    chatTitle.textContent = `💬 ${username} ${statusIcon}`;
+    
+    // Получаем информацию о пользователе
+    const userInfo = allUsers.find(u => u.username === username);
+    let statusText = '⚫ Офлайн';
+    
+    if (userInfo) {
+        if (userInfo.isOnline) {
+            statusText = '🟢 Онлайн';
+        } else if (userInfo.lastOnline) {
+            const lastOnlineDate = new Date(userInfo.lastOnline);
+            const now = new Date();
+            const diffMinutes = Math.floor((now - lastOnlineDate) / 60000);
+            
+            if (diffMinutes < 1) {
+                statusText = '🟢 Только что';
+            } else if (diffMinutes < 60) {
+                statusText = `⚫ Был онлайн: ${diffMinutes} мин назад`;
+            } else if (diffMinutes < 1440) {
+                const hours = Math.floor(diffMinutes / 60);
+                statusText = `⚫ Был онлайн: ${hours}ч назад`;
+            } else {
+                const days = Math.floor(diffMinutes / 1440);
+                statusText = `⚫ Был онлайн: ${days}д назад`;
+            }
+        }
+    }
+    
+    chatTitle.innerHTML = `💬 ${username}<br><span style="font-size: 12px; color: #999;">${statusText}</span>`;
     messagesContainer.innerHTML = '';
     
     unreadMessages[username] = 0;
@@ -465,12 +492,14 @@ messageInput.addEventListener('keypress', (e) => {
 });
 
 // Кнопки для фото и видео
-photoBtn.addEventListener('click', () => {
+photoBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
     photoInput.click();
     attachMenu.classList.remove('active');
 });
 
-videoBtn.addEventListener('click', () => {
+videoBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
     videoInput.click();
     attachMenu.classList.remove('active');
 });
@@ -843,6 +872,18 @@ function displayMessage(data) {
     const senderName = data.username || data.from;
     const formattedTime = formatTime(data.timestamp);
     
+    // Галочки для статуса прочитанности
+    let checkmarks = '';
+    if (isOwn) {
+        if (data.readStatus === 2) {
+            checkmarks = '<span class="read-status">✓✓</span>';
+        } else if (data.readStatus === 1) {
+            checkmarks = '<span class="read-status">✓</span>';
+        } else {
+            checkmarks = '<span class="read-status">✓</span>';
+        }
+    }
+    
     if (data.type === 'file') {
         let captionHtml = '';
         if (data.caption) {
@@ -853,6 +894,7 @@ function displayMessage(data) {
             <div class="message-header">
                 <span class="username">${senderName}</span>
                 <span class="timestamp">${formattedTime}</span>
+                ${checkmarks}
             </div>
             <div class="message-content">
                 ${getMediaPreview(data.url, data.mimetype, data.originalname)}
@@ -864,6 +906,7 @@ function displayMessage(data) {
             <div class="message-header">
                 <span class="username">${senderName}</span>
                 <span class="timestamp">${formattedTime}</span>
+                ${checkmarks}
             </div>
             <div class="message-bubble">${data.message}</div>
         `;

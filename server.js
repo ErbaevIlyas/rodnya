@@ -29,6 +29,7 @@ async function initializeDB() {
                 id SERIAL PRIMARY KEY,
                 username VARCHAR(255) UNIQUE NOT NULL,
                 password VARCHAR(255) NOT NULL,
+                last_online TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         `);
@@ -47,6 +48,7 @@ async function initializeDB() {
                 caption TEXT,
                 type VARCHAR(50) DEFAULT 'text',
                 is_general INTEGER DEFAULT 0,
+                read_status INTEGER DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         `);
@@ -186,20 +188,30 @@ io.on('connection', (socket) => {
                 return;
             }
             
+            // Обновляем last_online
+            await pool.query(
+                'UPDATE users SET last_online = CURRENT_TIMESTAMP WHERE username = $1',
+                [username]
+            );
+            
             socket.username = username;
             connectedUsers.set(socket.id, { username, socketId: socket.id });
             
             console.log('✅ Пользователь вошел:', username);
             socket.emit('login-response', { success: true, message: 'Вход успешен' });
             
-            // Отправляем список пользователей
-            const usersResult = await pool.query('SELECT username FROM users');
-            const usersList = usersResult.rows.map(u => u.username);
+            // Отправляем список пользователей с информацией об онлайне
+            const usersResult = await pool.query('SELECT username, last_online FROM users');
+            const onlineUsernames = Array.from(connectedUsers.values()).map(u => u.username);
+            const usersList = usersResult.rows.map(u => ({
+                username: u.username,
+                isOnline: onlineUsernames.includes(u.username),
+                lastOnline: u.last_online
+            }));
             socket.emit('users-list', usersList);
             
             // Отправляем онлайн пользователей
-            const onlineUsers = Array.from(connectedUsers.values()).map(u => u.username);
-            io.emit('online-users', onlineUsers);
+            io.emit('online-users', onlineUsernames);
             
             // Отправляем историю общего чата
             const messagesResult = await pool.query(
@@ -215,7 +227,8 @@ io.on('connection', (socket) => {
                 mimetype: msg.mimetype,
                 caption: msg.caption,
                 timestamp: msg.created_at,
-                type: msg.type
+                type: msg.type,
+                readStatus: msg.read_status
             }));
             socket.emit('load-general-messages', messages);
             
@@ -296,9 +309,9 @@ io.on('connection', (socket) => {
             if (!username) return;
             
             const result = await pool.query(
-                `INSERT INTO messages (from_user, to_user, message, type, is_general) 
-                 VALUES ($1, $2, $3, $4, $5) RETURNING id`,
-                [username, 'general', data.message, 'text', 1]
+                `INSERT INTO messages (from_user, to_user, message, type, is_general, read_status) 
+                 VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+                [username, 'general', data.message, 'text', 1, 0]
             );
             
             const formattedMessage = {
@@ -306,7 +319,8 @@ io.on('connection', (socket) => {
                 username: username,
                 message: data.message,
                 timestamp: new Date().toLocaleString('ru-RU'),
-                type: 'text'
+                type: 'text',
+                readStatus: 0
             };
             
             io.to('general').emit('new-message', formattedMessage);
@@ -322,9 +336,9 @@ io.on('connection', (socket) => {
             if (!username) return;
             
             const result = await pool.query(
-                `INSERT INTO messages (from_user, to_user, filename, originalname, url, mimetype, caption, type, is_general) 
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
-                [username, 'general', data.filename, data.originalname, data.url, data.mimetype, data.caption || '', 'file', 1]
+                `INSERT INTO messages (from_user, to_user, filename, originalname, url, mimetype, caption, type, is_general, read_status) 
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id`,
+                [username, 'general', data.filename, data.originalname, data.url, data.mimetype, data.caption || '', 'file', 1, 0]
             );
             
             const formattedMessage = {
@@ -336,7 +350,8 @@ io.on('connection', (socket) => {
                 mimetype: data.mimetype,
                 caption: data.caption || '',
                 timestamp: new Date().toLocaleString('ru-RU'),
-                type: 'file'
+                type: 'file',
+                readStatus: 0
             };
             
             io.to('general').emit('new-message', formattedMessage);
@@ -364,9 +379,9 @@ io.on('connection', (socket) => {
             const { recipientUsername, message } = data;
             
             const result = await pool.query(
-                `INSERT INTO messages (from_user, to_user, message, type, is_general) 
-                 VALUES ($1, $2, $3, $4, $5) RETURNING id`,
-                [senderUsername, recipientUsername, message, 'text', 0]
+                `INSERT INTO messages (from_user, to_user, message, type, is_general, read_status) 
+                 VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+                [senderUsername, recipientUsername, message, 'text', 0, 0]
             );
             
             let recipientSocketId = null;
@@ -383,7 +398,8 @@ io.on('connection', (socket) => {
                 to: recipientUsername,
                 message: message,
                 timestamp: new Date().toLocaleString('ru-RU'),
-                type: 'text'
+                type: 'text',
+                readStatus: 0
             };
             
             socket.emit('private-message', formattedMessage);
@@ -405,9 +421,9 @@ io.on('connection', (socket) => {
             const { recipientUsername, filename, originalname, url, mimetype, caption } = data;
             
             const result = await pool.query(
-                `INSERT INTO messages (from_user, to_user, filename, originalname, url, mimetype, caption, type, is_general) 
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
-                [senderUsername, recipientUsername, filename, originalname, url, mimetype, caption || '', 'file', 0]
+                `INSERT INTO messages (from_user, to_user, filename, originalname, url, mimetype, caption, type, is_general, read_status) 
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id`,
+                [senderUsername, recipientUsername, filename, originalname, url, mimetype, caption || '', 'file', 0, 0]
             );
             
             let recipientSocketId = null;
@@ -428,7 +444,8 @@ io.on('connection', (socket) => {
                 mimetype: mimetype,
                 caption: caption || '',
                 timestamp: new Date().toLocaleString('ru-RU'),
-                type: 'file'
+                type: 'file',
+                readStatus: 0
             };
             
             socket.emit('private-message', formattedMessage);
