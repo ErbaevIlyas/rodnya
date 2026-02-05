@@ -465,6 +465,17 @@ server.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 Сервер Родня запущен на порту ${PORT}`);
 });
 
+// Автопинг каждые 10 минут, чтобы сервер не засыпал на Render
+setInterval(() => {
+    const protocol = process.env.NODE_ENV === 'production' ? 'https' : 'http';
+    const host = process.env.RENDER_EXTERNAL_URL || `http://localhost:${PORT}`;
+    
+    fetch(`${host}/ping`)
+        .then(res => res.json())
+        .then(() => console.log('✅ Автопинг отправлен'))
+        .catch(err => console.log('⚠️ Ошибка автопинга:', err.message));
+}, 10 * 60 * 1000);
+
 process.on('SIGINT', () => {
     console.log('Закрытие БД...');
     pool.end();
