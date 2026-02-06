@@ -85,9 +85,11 @@ const sendBtn = document.getElementById('send-btn');
 const fileInput = document.getElementById('file-input');
 const photoInput = document.getElementById('photo-input');
 const videoInput = document.getElementById('video-input');
+const docInput = document.getElementById('doc-input');
 const fileUploadArea = document.getElementById('file-upload-area');
 const photoBtn = document.getElementById('photo-btn');
 const videoBtn = document.getElementById('video-btn');
+const fileBtn = document.getElementById('file-btn');
 const attachBtn = document.getElementById('attach-btn');
 const attachMenu = document.getElementById('attach-menu');
 const emojiBtn = document.getElementById('emoji-btn');
@@ -504,6 +506,12 @@ videoBtn.addEventListener('click', (e) => {
     attachMenu.classList.remove('active');
 });
 
+fileBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    docInput.click();
+    attachMenu.classList.remove('active');
+});
+
 // Меню прикрепления
 attachBtn.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -528,6 +536,13 @@ videoInput.addEventListener('change', (e) => {
     if (e.target.files.length > 0) {
         handleFiles(e.target.files);
         videoInput.value = '';
+    }
+});
+
+docInput.addEventListener('change', (e) => {
+    if (e.target.files.length > 0) {
+        handleFiles(e.target.files);
+        docInput.value = '';
     }
 });
 
@@ -564,6 +579,7 @@ function handleFiles(files) {
         } else if (file.type.startsWith('video/')) {
             showVideoPreview(file);
         } else {
+            // Документы загружаются сразу без предпросмотра
             uploadFile(file);
         }
     });
@@ -1000,5 +1016,19 @@ function getMediaPreview(url, mimetype, filename) {
         return `<audio src="${url}" controls class="message-audio"></audio>`;
     }
     
-    return `<a href="${url}" target="_blank" class="file-link">Скачать файл</a>`;
+    // Для документов показываем иконку и ссылку
+    const getFileIcon = (name) => {
+        if (name.endsWith('.pdf')) return '📄';
+        if (name.endsWith('.doc') || name.endsWith('.docx')) return '📝';
+        if (name.endsWith('.xls') || name.endsWith('.xlsx')) return '📊';
+        if (name.endsWith('.ppt') || name.endsWith('.pptx')) return '🎯';
+        if (name.endsWith('.zip') || name.endsWith('.rar')) return '📦';
+        return '📎';
+    };
+    
+    const icon = getFileIcon(filename);
+    return `<a href="${url}" target="_blank" class="file-link" style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: #f0f0f0; border-radius: 6px; text-decoration: none; color: #333; width: fit-content;">
+        <span style="font-size: 20px;">${icon}</span>
+        <span style="font-size: 13px; word-break: break-all;">${filename}</span>
+    </a>`;
 }
