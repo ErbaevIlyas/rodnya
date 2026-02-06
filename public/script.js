@@ -102,6 +102,9 @@ const imageCaptionInput = document.getElementById('image-caption');
 const sendPreviewBtn = document.getElementById('send-preview');
 const cancelPreviewBtn = document.getElementById('cancel-preview');
 const closePreviewBtn = document.getElementById('close-preview');
+const imageViewerModal = document.getElementById('image-viewer-modal');
+const viewerImage = document.getElementById('viewer-image');
+const closeViewerBtn = document.getElementById('close-viewer');
 const usersList = document.getElementById('users-list');
 const chatHeader = document.getElementById('chat-header');
 const backToGeneralBtn = document.getElementById('back-to-general-btn');
@@ -641,6 +644,18 @@ cancelPreviewBtn.addEventListener('click', () => {
     currentPreviewFile = null;
 });
 
+// Закрытие просмотра картинки из сообщений
+closeViewerBtn.addEventListener('click', () => {
+    imageViewerModal.classList.remove('active');
+});
+
+// Закрытие при клике на фон
+imageViewerModal.addEventListener('click', (e) => {
+    if (e.target === imageViewerModal) {
+        imageViewerModal.classList.remove('active');
+    }
+});
+
 // Отправка изображения с подписью
 sendPreviewBtn.addEventListener('click', () => {
     if (currentPreviewFile) {
@@ -1005,7 +1020,7 @@ function removeWelcomeMessage() {
 // Предварительный просмотр медиа
 function getMediaPreview(url, mimetype, filename) {
     if (mimetype.startsWith('image/')) {
-        return `<img src="${url}" alt="${filename}" class="message-image" onclick="window.open('${url}', '_blank')">`;
+        return `<img src="${url}" alt="${filename}" class="message-image" onclick="openImageViewer('${url}')">`;
     }
     
     if (mimetype.startsWith('video/')) {
@@ -1031,4 +1046,10 @@ function getMediaPreview(url, mimetype, filename) {
         <span style="font-size: 20px;">${icon}</span>
         <span style="font-size: 13px; word-break: break-all;">${filename}</span>
     </a>`;
+}
+
+// Открытие картинки в модале
+function openImageViewer(url) {
+    viewerImage.src = url;
+    imageViewerModal.classList.add('active');
 }

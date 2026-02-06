@@ -120,6 +120,7 @@ app.post('/upload', upload.single('file'), (req, res) => {
         return res.status(400).json({ error: 'Файл не загружен' });
     }
     
+    res.set('Content-Type', 'application/json');
     res.json({
         filename: req.file.filename,
         originalname: req.file.originalname,
@@ -127,6 +128,23 @@ app.post('/upload', upload.single('file'), (req, res) => {
         size: req.file.size,
         url: `/uploads/${req.file.filename}`
     });
+});
+
+// Скачивание файлов с правильными headers
+app.get('/uploads/:filename', (req, res) => {
+    const filename = req.params.filename;
+    const filepath = path.join(__dirname, 'uploads', filename);
+    
+    // Проверяем что файл существует
+    if (!fs.existsSync(filepath)) {
+        return res.status(404).json({ error: 'Файл не найден' });
+    }
+    
+    // Устанавливаем правильные headers для скачивания
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Type', 'application/octet-stream');
+    
+    res.download(filepath);
 });
 
 // Socket.IO
