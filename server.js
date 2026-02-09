@@ -40,6 +40,15 @@ async function initializeDB() {
             ALTER TABLE users ADD COLUMN IF NOT EXISTS last_online TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         `);
 
+        // Добавляем колонки для профиля
+        await pool.query(`
+            ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url VARCHAR(255)
+        `);
+
+        await pool.query(`
+            ALTER TABLE users ADD COLUMN IF NOT EXISTS status_text VARCHAR(255)
+        `);
+
         await pool.query(`
             CREATE TABLE IF NOT EXISTS messages (
                 id SERIAL PRIMARY KEY,
@@ -502,6 +511,53 @@ io.on('connection', (socket) => {
             io.emit('message-read', { id: data.id });
         } catch (error) {
             console.error('Ошибка отметки прочитанности:', error);
+        }
+    });
+    
+    // Получить данные профиля
+    socket.on('get-profile', async (data) => {
+        try {
+            const result = await pool.query(
+                'SELECT avatar_url, status_text FROM users WHERE username = $1',
+                [data.username]
+            );
+            
+            if (result.rows.length > 0) {
+                socket.emit('profile-data', {
+                    avatar_url: result.rows[0].avatar_url,
+                    status_text: result.rows[0].status_text || ''
+                });
+            }
+        } catch (error) {
+            console.error('Ошибка получения профиля:', error);
+        }
+    });
+    
+    // Обновить аватарку
+    socket.on('update-avatar', async (data) => {
+        try {
+            await pool.query(
+                'UPDATE users SET avatar_url = $1 WHERE username = $2',
+                [data.avatar_url, data.username]
+            );
+            console.log('✅ Аватарка обновлена:', data.username);
+        } catch (error) {
+            console.error('Ошибка обновления аватарки:', error);
+        }
+    });
+    
+    // Обновить профиль
+    socket.on('update-profile', async (data) => {
+        try {
+            await pool.query(
+                'UPDATE users SET status_text = $1 WHERE username = $2',
+                [data.status_text, data.username]
+            );
+            socket.emit('profile-updated', { success: true });
+            console.log('✅ Профиль обновлен:', data.username);
+        } catch (error) {
+            console.error('Ошибка обновления профиля:', error);
+            socket.emit('profile-updated', { success: false });
         }
     });
     

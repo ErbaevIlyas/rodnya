@@ -79,6 +79,17 @@ const registerBtn = document.getElementById('register-btn');
 const mainContainer = document.getElementById('main-container');
 const currentUserSpan = document.getElementById('current-user');
 const logoutBtn = document.getElementById('logout-btn');
+const profileBtn = document.getElementById('profile-btn');
+const profileModal = document.getElementById('profile-modal');
+const closeProfileBtn = document.getElementById('close-profile');
+const changeAvatarBtn = document.getElementById('change-avatar-btn');
+const avatarInput = document.getElementById('avatar-input');
+const profileAvatar = document.getElementById('profile-avatar');
+const profileUsername = document.getElementById('profile-username');
+const profileStatus = document.getElementById('profile-status');
+const profileSaveBtn = document.getElementById('profile-save-btn');
+const lightThemeBtn = document.getElementById('light-theme-btn');
+const darkThemeBtn = document.getElementById('dark-theme-btn');
 const messagesContainer = document.getElementById('messages');
 const messageInput = document.getElementById('message-input');
 const sendBtn = document.getElementById('send-btn');
@@ -183,6 +194,8 @@ document.addEventListener('click', (e) => {
 
 // Инициализация
 document.addEventListener('DOMContentLoaded', () => {
+    loadTheme();
+    
     const { username: savedUsername, password: savedPassword } = getCredentials();
     
     if (savedUsername && savedPassword) {
@@ -322,6 +335,105 @@ socket.on('online-users', (users) => {
     onlineCount.textContent = users.length;
     updateUsersList();
 });
+
+// Профиль
+profileBtn.addEventListener('click', () => {
+    profileModal.classList.add('active');
+    profileUsername.value = currentUsername;
+    loadProfileData();
+});
+
+closeProfileBtn.addEventListener('click', () => {
+    profileModal.classList.remove('active');
+});
+
+profileModal.addEventListener('click', (e) => {
+    if (e.target === profileModal) {
+        profileModal.classList.remove('active');
+    }
+});
+
+changeAvatarBtn.addEventListener('click', () => {
+    avatarInput.click();
+});
+
+avatarInput.addEventListener('change', (e) => {
+    if (e.target.files.length > 0) {
+        uploadAvatar(e.target.files[0]);
+        avatarInput.value = '';
+    }
+});
+
+profileSaveBtn.addEventListener('click', () => {
+    saveProfileData();
+});
+
+// Переключение темы
+lightThemeBtn.addEventListener('click', () => {
+    setTheme('light');
+});
+
+darkThemeBtn.addEventListener('click', () => {
+    setTheme('dark');
+});
+
+function setTheme(theme) {
+    if (theme === 'light') {
+        document.body.classList.remove('dark-theme');
+        lightThemeBtn.classList.add('active');
+        darkThemeBtn.classList.remove('active');
+    } else {
+        document.body.classList.add('dark-theme');
+        darkThemeBtn.classList.add('active');
+        lightThemeBtn.classList.remove('active');
+    }
+    localStorage.setItem('theme', theme);
+}
+
+// Загрузка сохранённой темы при загрузке страницы
+function loadTheme() {
+    const savedTheme = localStorage.getItem('theme') || 'dark';
+    setTheme(savedTheme);
+}
+
+// Загрузка данных профиля
+function loadProfileData() {
+    socket.emit('get-profile', { username: currentUsername });
+}
+
+// Сохранение данных профиля
+function saveProfileData() {
+    const status = profileStatus.value.trim();
+    socket.emit('update-profile', { 
+        username: currentUsername,
+        status_text: status
+    });
+}
+
+// Загрузка аватарки
+async function uploadAvatar(file) {
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    try {
+        const response = await fetch('/upload', {
+            method: 'POST',
+            body: formData
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+            socket.emit('update-avatar', {
+                username: currentUsername,
+                avatar_url: result.url
+            });
+            profileAvatar.src = result.url;
+        }
+    } catch (error) {
+        alert('Ошибка загрузки аватарки: ' + error.message);
+    }
+}
 
 // Выход
 logoutBtn.addEventListener('click', () => {
@@ -902,6 +1014,24 @@ socket.on('message-read', (data) => {
         if (statusSpan) {
             statusSpan.textContent = '✓✓';
         }
+    }
+});
+
+socket.on('profile-data', (data) => {
+    if (data.avatar_url) {
+        profileAvatar.src = data.avatar_url;
+    } else {
+        profileAvatar.src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="50" fill="%23667eea"/><circle cx="50" cy="35" r="15" fill="white"/><path d="M 20 70 Q 20 55 50 55 Q 80 55 80 70" fill="white"/></svg>';
+    }
+    profileStatus.value = data.status_text || '';
+});
+
+socket.on('profile-updated', (data) => {
+    if (data.success) {
+        alert('Профиль обновлен!');
+        profileModal.classList.remove('active');
+    } else {
+        alert('Ошибка обновления профиля');
     }
 });
 
