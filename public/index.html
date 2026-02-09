@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, shrink-to-fit=no">
     <title>Родня - Социальная сеть</title>
-    <link rel="stylesheet" href="style.css?v=13.3">
+    <link rel="stylesheet" href="style.css?v=13.5">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#4facfe">
@@ -166,7 +166,24 @@
         </div>
     </div>
 
-    <!-- Модал профиля -->
+    <!-- Модал для редактирования аватарки -->
+    <div class="avatar-editor-modal" id="avatar-editor-modal">
+        <div class="avatar-editor-content">
+            <button class="close-editor" id="close-editor">&times;</button>
+            <h3>Редактировать аватарку</h3>
+            <div class="avatar-editor-container">
+                <canvas id="avatar-canvas"></canvas>
+                <div class="avatar-controls">
+                    <input type="range" id="zoom-slider" min="0.5" max="3" step="0.1" value="1">
+                    <span id="zoom-value">100%</span>
+                </div>
+            </div>
+            <div class="avatar-editor-buttons">
+                <button class="btn-cancel" id="cancel-editor">Отмена</button>
+                <button class="btn-save" id="save-editor">Сохранить</button>
+            </div>
+        </div>
+    </div>
     <div class="profile-modal" id="profile-modal">
         <div class="profile-content">
             <button class="close-profile" id="close-profile">&times;</button>
@@ -194,7 +211,7 @@
     </div>
 
     <script src="/socket.io/socket.io.js"></script>
-    <script src="script.js?v=13.3"></script>
+    <script src="script.js?v=13.5"></script>
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {

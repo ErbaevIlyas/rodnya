@@ -1060,6 +1060,10 @@ function displayMessage(data) {
     const senderName = data.username || data.from;
     const formattedTime = formatTime(data.timestamp);
     
+    // Получаем аватарку пользователя
+    const userInfo = allUsers.find(u => u.username === senderName);
+    const avatarUrl = userInfo && userInfo.avatar_url ? userInfo.avatar_url : null;
+    
     // Галочки для статуса прочитанности
     let checkmarks = '';
     if (isOwn) {
@@ -1072,6 +1076,15 @@ function displayMessage(data) {
         }
     }
     
+    // HTML для аватарки
+    let avatarHtml = '';
+    if (avatarUrl) {
+        avatarHtml = `<img src="${avatarUrl}" alt="${senderName}" class="message-avatar">`;
+    } else {
+        const initials = senderName.substring(0, 1).toUpperCase();
+        avatarHtml = `<div class="message-avatar-placeholder">${initials}</div>`;
+    }
+    
     if (data.type === 'file') {
         let captionHtml = '';
         if (data.caption) {
@@ -1079,24 +1092,30 @@ function displayMessage(data) {
         }
         
         messageDiv.innerHTML = `
-            <div class="message-header">
-                <span class="username">${senderName}</span>
-                <span class="timestamp">${formattedTime}</span>
-                ${checkmarks}
-            </div>
+            ${!isOwn ? avatarHtml : ''}
             <div class="message-content">
+                <div class="message-header">
+                    <span class="username">${senderName}</span>
+                    <span class="timestamp">${formattedTime}</span>
+                    ${checkmarks}
+                </div>
                 ${getMediaPreview(data.url, data.mimetype, data.originalname)}
                 ${captionHtml}
             </div>
+            ${isOwn ? avatarHtml : ''}
         `;
     } else {
         messageDiv.innerHTML = `
-            <div class="message-header">
-                <span class="username">${senderName}</span>
-                <span class="timestamp">${formattedTime}</span>
-                ${checkmarks}
+            ${!isOwn ? avatarHtml : ''}
+            <div class="message-content">
+                <div class="message-header">
+                    <span class="username">${senderName}</span>
+                    <span class="timestamp">${formattedTime}</span>
+                    ${checkmarks}
+                </div>
+                <div class="message-bubble">${data.message}</div>
             </div>
-            <div class="message-bubble">${data.message}</div>
+            ${isOwn ? avatarHtml : ''}
         `;
     }
     
@@ -1196,3 +1215,209 @@ function openImageViewer(url) {
     viewerImage.src = url;
     imageViewerModal.classList.add('active');
 }
+
+// ===== AVATAR EDITOR =====
+let avatarEditorState = {
+    image: null,
+    zoom: 1,
+    offsetX: 0,
+    offsetY: 0,
+    isDragging: false,
+    dragStartX: 0,
+    dragStartY: 0
+};
+
+const avatarEditorModal = document.getElementById('avatar-editor-modal');
+const closeEditorBtn = document.getElementById('close-editor');
+const cancelEditorBtn = document.getElementById('cancel-editor');
+const saveEditorBtn = document.getElementById('save-editor');
+const zoomSlider = document.getElementById('zoom-slider');
+const zoomValue = document.getElementById('zoom-value');
+const avatarCanvas = document.getElementById('avatar-canvas');
+const canvasCtx = avatarCanvas.getContext('2d');
+
+// Открытие редактора аватарки
+changeAvatarBtn.addEventListener('click', () => {
+    avatarInput.click();
+});
+
+avatarInput.addEventListener('change', (e) => {
+    if (e.target.files.length > 0) {
+        const file = e.target.files[0];
+        const reader = new FileReader();
+        
+        reader.onload = (event) => {
+            const img = new Image();
+            img.onload = () => {
+                avatarEditorState.image = img;
+                avatarEditorState.zoom = 1;
+                avatarEditorState.offsetX = 0;
+                avatarEditorState.offsetY = 0;
+                
+                zoomSlider.value = 1;
+                zoomValue.textContent = '100%';
+                
+                avatarEditorModal.classList.add('active');
+                drawAvatarPreview();
+            };
+            img.src = event.target.result;
+        };
+        
+        reader.readAsDataURL(file);
+        avatarInput.value = '';
+    }
+});
+
+// Закрытие редактора
+closeEditorBtn.addEventListener('click', () => {
+    avatarEditorModal.classList.remove('active');
+    avatarEditorState.image = null;
+});
+
+cancelEditorBtn.addEventListener('click', () => {
+    avatarEditorModal.classList.remove('active');
+    avatarEditorState.image = null;
+});
+
+// Зум слайдер
+zoomSlider.addEventListener('input', (e) => {
+    avatarEditorState.zoom = parseFloat(e.target.value);
+    zoomValue.textContent = Math.round(avatarEditorState.zoom * 100) + '%';
+    drawAvatarPreview();
+});
+
+// Канвас события
+avatarCanvas.addEventListener('mousedown', (e) => {
+    avatarEditorState.isDragging = true;
+    avatarEditorState.dragStartX = e.clientX;
+    avatarEditorState.dragStartY = e.clientY;
+});
+
+avatarCanvas.addEventListener('mousemove', (e) => {
+    if (avatarEditorState.isDragging) {
+        const deltaX = e.clientX - avatarEditorState.dragStartX;
+        const deltaY = e.clientY - avatarEditorState.dragStartY;
+        
+        avatarEditorState.offsetX += deltaX;
+        avatarEditorState.offsetY += deltaY;
+        
+        avatarEditorState.dragStartX = e.clientX;
+        avatarEditorState.dragStartY = e.clientY;
+        
+        drawAvatarPreview();
+    }
+});
+
+avatarCanvas.addEventListener('mouseup', () => {
+    avatarEditorState.isDragging = false;
+});
+
+avatarCanvas.addEventListener('mouseleave', () => {
+    avatarEditorState.isDragging = false;
+});
+
+// Сенсорные события для мобильных
+avatarCanvas.addEventListener('touchstart', (e) => {
+    if (e.touches.length === 1) {
+        avatarEditorState.isDragging = true;
+        avatarEditorState.dragStartX = e.touches[0].clientX;
+        avatarEditorState.dragStartY = e.touches[0].clientY;
+    }
+});
+
+avatarCanvas.addEventListener('touchmove', (e) => {
+    if (avatarEditorState.isDragging && e.touches.length === 1) {
+        const deltaX = e.touches[0].clientX - avatarEditorState.dragStartX;
+        const deltaY = e.touches[0].clientY - avatarEditorState.dragStartY;
+        
+        avatarEditorState.offsetX += deltaX;
+        avatarEditorState.offsetY += deltaY;
+        
+        avatarEditorState.dragStartX = e.touches[0].clientX;
+        avatarEditorState.dragStartY = e.touches[0].clientY;
+        
+        drawAvatarPreview();
+    }
+});
+
+avatarCanvas.addEventListener('touchend', () => {
+    avatarEditorState.isDragging = false;
+});
+
+// Рисование превью аватарки
+function drawAvatarPreview() {
+    if (!avatarEditorState.image) return;
+    
+    const canvas = avatarCanvas;
+    const ctx = canvasCtx;
+    const size = 300;
+    
+    canvas.width = size;
+    canvas.height = size;
+    
+    // Очищаем канвас
+    ctx.fillStyle = '#f5f5f5';
+    ctx.fillRect(0, 0, size, size);
+    
+    // Рисуем круг для маски
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2);
+    ctx.clip();
+    
+    // Рисуем изображение
+    const img = avatarEditorState.image;
+    const zoom = avatarEditorState.zoom;
+    const offsetX = avatarEditorState.offsetX;
+    const offsetY = avatarEditorState.offsetY;
+    
+    const scaledWidth = img.width * zoom;
+    const scaledHeight = img.height * zoom;
+    const x = (size - scaledWidth) / 2 + offsetX;
+    const y = (size - scaledHeight) / 2 + offsetY;
+    
+    ctx.drawImage(img, x, y, scaledWidth, scaledHeight);
+    ctx.restore();
+    
+    // Рисуем границу круга
+    ctx.strokeStyle = '#667eea';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2);
+    ctx.stroke();
+}
+
+// Сохранение аватарки
+saveEditorBtn.addEventListener('click', async () => {
+    if (!avatarEditorState.image) return;
+    
+    const canvas = avatarCanvas;
+    canvas.toBlob(async (blob) => {
+        const file = new File([blob], `avatar-${Date.now()}.png`, { type: 'image/png' });
+        
+        const formData = new FormData();
+        formData.append('file', file);
+        
+        try {
+            const response = await fetch('/upload', {
+                method: 'POST',
+                body: formData
+            });
+            
+            const result = await response.json();
+            
+            if (response.ok) {
+                socket.emit('update-avatar', {
+                    username: currentUsername,
+                    avatar_url: result.url
+                });
+                profileAvatar.src = result.url;
+                avatarEditorModal.classList.remove('active');
+                avatarEditorState.image = null;
+                alert('Аватарка сохранена!');
+            }
+        } catch (error) {
+            alert('Ошибка сохранения аватарки: ' + error.message);
+        }
+    }, 'image/png');
+});

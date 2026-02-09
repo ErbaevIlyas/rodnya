@@ -242,12 +242,13 @@ io.on('connection', (socket) => {
             socket.emit('login-response', { success: true, message: 'Вход успешен' });
             
             // Отправляем список пользователей с информацией об онлайне
-            const usersResult = await pool.query('SELECT username, last_online FROM users');
+            const usersResult = await pool.query('SELECT username, last_online, avatar_url FROM users');
             const onlineUsernames = Array.from(connectedUsers.values()).map(u => u.username);
             const usersList = usersResult.rows.map(u => ({
                 username: u.username,
                 isOnline: onlineUsernames.includes(u.username),
-                lastOnline: u.last_online
+                lastOnline: u.last_online,
+                avatar_url: u.avatar_url
             }));
             socket.emit('users-list', usersList);
             
