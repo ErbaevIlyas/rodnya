@@ -549,15 +549,48 @@ io.on('connection', (socket) => {
     // Обновить профиль
     socket.on('update-profile', async (data) => {
         try {
+            const { oldUsername, newUsername, status_text } = data;
+            
+            // Проверяем что новое имя не занято
+            if (oldUsername !== newUsername) {
+                const checkResult = await pool.query(
+                    'SELECT username FROM users WHERE username = $1',
+                    [newUsername]
+                );
+                
+                if (checkResult.rows.length > 0) {
+                    socket.emit('profile-updated', { success: false, message: 'Это имя уже занято' });
+                    return;
+                }
+                
+                // Обновляем имя везде
+                await pool.query(
+                    'UPDATE users SET username = $1 WHERE username = $2',
+                    [newUsername, oldUsername]
+                );
+                
+                await pool.query(
+                    'UPDATE messages SET from_user = $1 WHERE from_user = $2',
+                    [newUsername, oldUsername]
+                );
+                
+                await pool.query(
+                    'UPDATE messages SET to_user = $1 WHERE to_user = $2',
+                    [newUsername, oldUsername]
+                );
+            }
+            
+            // Обновляем статус
             await pool.query(
                 'UPDATE users SET status_text = $1 WHERE username = $2',
-                [data.status_text, data.username]
+                [status_text, newUsername || oldUsername]
             );
-            socket.emit('profile-updated', { success: true });
-            console.log('✅ Профиль обновлен:', data.username);
+            
+            socket.emit('profile-updated', { success: true, newUsername: newUsername || oldUsername });
+            console.log('✅ Профиль обновлен:', newUsername || oldUsername);
         } catch (error) {
             console.error('Ошибка обновления профиля:', error);
-            socket.emit('profile-updated', { success: false });
+            socket.emit('profile-updated', { success: false, message: 'Ошибка сервера' });
         }
     });
     

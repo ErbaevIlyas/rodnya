@@ -403,9 +403,17 @@ function loadProfileData() {
 
 // Сохранение данных профиля
 function saveProfileData() {
+    const newUsername = profileUsername.value.trim();
     const status = profileStatus.value.trim();
+    
+    if (!newUsername) {
+        alert('Имя не может быть пустым');
+        return;
+    }
+    
     socket.emit('update-profile', { 
-        username: currentUsername,
+        oldUsername: currentUsername,
+        newUsername: newUsername,
         status_text: status
     });
 }
@@ -1028,10 +1036,15 @@ socket.on('profile-data', (data) => {
 
 socket.on('profile-updated', (data) => {
     if (data.success) {
+        if (data.newUsername && data.newUsername !== currentUsername) {
+            currentUsername = data.newUsername;
+            currentUserSpan.textContent = `👤 ${currentUsername}`;
+            saveCredentials(currentUsername, getCookie('password'));
+        }
         alert('Профиль обновлен!');
         profileModal.classList.remove('active');
     } else {
-        alert('Ошибка обновления профиля');
+        alert('Ошибка: ' + (data.message || 'Не удалось обновить профиль'));
     }
 });
 
