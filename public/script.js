@@ -779,12 +779,23 @@ imageViewerModal.addEventListener('click', (e) => {
 // Полноэкранный просмотр картинок
 const fullscreenImageModal = document.getElementById('fullscreen-image-modal');
 const fullscreenImage = document.getElementById('fullscreen-image');
+const fullscreenImageContainer = document.getElementById('fullscreen-image-container');
 const closeFullscreenBtn = document.getElementById('close-fullscreen');
 const fullscreenViewerBtn = document.getElementById('fullscreen-viewer-btn');
+const zoomInBtn = document.getElementById('zoom-in-btn');
+const zoomOutBtn = document.getElementById('zoom-out-btn');
+const zoomLevel = document.getElementById('zoom-level');
+
+let currentZoom = 1;
+const minZoom = 0.5;
+const maxZoom = 4;
+const zoomStep = 0.2;
 
 fullscreenViewerBtn.addEventListener('click', () => {
     const currentImageSrc = viewerImage.src;
     fullscreenImage.src = currentImageSrc;
+    currentZoom = 1;
+    updateZoomLevel();
     imageViewerModal.classList.remove('active');
     fullscreenImageModal.classList.add('active');
 });
@@ -799,6 +810,40 @@ fullscreenImageModal.addEventListener('click', (e) => {
         fullscreenImageModal.classList.remove('active');
         imageViewerModal.classList.add('active');
     }
+});
+
+// Зум функции
+function updateZoomLevel() {
+    currentZoom = Math.max(minZoom, Math.min(maxZoom, currentZoom));
+    fullscreenImage.style.transform = `scale(${currentZoom})`;
+    zoomLevel.textContent = Math.round(currentZoom * 100) + '%';
+}
+
+zoomInBtn.addEventListener('click', () => {
+    currentZoom += zoomStep;
+    updateZoomLevel();
+});
+
+zoomOutBtn.addEventListener('click', () => {
+    currentZoom -= zoomStep;
+    updateZoomLevel();
+});
+
+// Зум колесом мыши
+fullscreenImageContainer.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    if (e.deltaY < 0) {
+        currentZoom += zoomStep;
+    } else {
+        currentZoom -= zoomStep;
+    }
+    updateZoomLevel();
+}, { passive: false });
+
+// Двойной клик для сброса зума
+fullscreenImage.addEventListener('dblclick', () => {
+    currentZoom = 1;
+    updateZoomLevel();
 });
 
 // Отправка изображения с подписью
