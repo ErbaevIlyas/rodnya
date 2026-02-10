@@ -644,6 +644,17 @@ io.on('connection', (socket) => {
                 [data.avatar_url, data.username]
             );
             console.log('✅ Аватарка обновлена:', data.username);
+            
+            // Отправляем обновленный список пользователей всем
+            const usersResult = await pool.query('SELECT username, last_online, avatar_url FROM users');
+            const onlineUsernames = Array.from(connectedUsers.values()).map(u => u.username);
+            const usersList = usersResult.rows.map(u => ({
+                username: u.username,
+                isOnline: onlineUsernames.includes(u.username),
+                lastOnline: u.last_online,
+                avatar_url: u.avatar_url
+            }));
+            io.emit('users-list', usersList);
         } catch (error) {
             console.error('Ошибка обновления аватарки:', error);
         }

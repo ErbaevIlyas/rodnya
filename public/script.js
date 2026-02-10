@@ -120,6 +120,9 @@ const usersList = document.getElementById('users-list');
 const chatHeader = document.getElementById('chat-header');
 const backToGeneralBtn = document.getElementById('back-to-general-btn');
 const toggleSidebarBtn = document.getElementById('toggle-sidebar-btn');
+const notificationPermissionBanner = document.getElementById('notification-permission-banner');
+const allowNotificationsBtn = document.getElementById('allow-notifications-btn');
+const dismissNotificationsBtn = document.getElementById('dismiss-notifications-btn');
 
 // Переменные
 let currentUsername = '';
@@ -198,8 +201,13 @@ document.addEventListener('DOMContentLoaded', () => {
     
     const { username: savedUsername, password: savedPassword } = getCredentials();
     
+    // Если есть сохранённые учётные данные, скрываем экран авторизации и сразу заходим
     if (savedUsername && savedPassword) {
         currentUsername = savedUsername;
+        // Скрываем экран авторизации сразу
+        authModal.style.display = 'none';
+        mainContainer.style.display = 'flex';
+        
         if (socket.connected) {
             socket.emit('login', { username: savedUsername, password: savedPassword });
         } else {
@@ -208,6 +216,9 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
     } else {
+        // Показываем экран авторизации только если нет сохранённых данных
+        authModal.style.display = 'flex';
+        mainContainer.style.display = 'none';
         loginUsernameInput.focus();
     }
     
@@ -331,10 +342,17 @@ socket.on('login-response', (data) => {
         
         socket.emit('load-general-chat', {});
         
+        // Показываем баннер для запроса разрешения на уведомления если нужно
         if ('Notification' in window && Notification.permission === 'default') {
-            Notification.requestPermission();
+            notificationPermissionBanner.style.display = 'flex';
         }
     } else {
+        // Если ошибка при автозаходе, показываем экран авторизации
+        authModal.style.display = 'flex';
+        mainContainer.style.display = 'none';
+        loginUsernameInput.value = '';
+        loginPasswordInput.value = '';
+        loginUsernameInput.focus();
         alert('Ошибка: ' + data.message);
     }
 });
@@ -416,6 +434,23 @@ lightThemeBtn.addEventListener('click', () => {
 
 darkThemeBtn.addEventListener('click', () => {
     setTheme('dark');
+});
+
+// Обработчики баннера для разрешения уведомлений
+allowNotificationsBtn.addEventListener('click', () => {
+    if ('Notification' in window) {
+        Notification.requestPermission().then((permission) => {
+            if (permission === 'granted') {
+                console.log('✅ Push notifications разрешены');
+                subscribeToPushNotifications();
+                notificationPermissionBanner.style.display = 'none';
+            }
+        });
+    }
+});
+
+dismissNotificationsBtn.addEventListener('click', () => {
+    notificationPermissionBanner.style.display = 'none';
 });
 
 function setTheme(theme) {
@@ -523,6 +558,20 @@ function updateUsersList() {
         userItem.className = 'user-item';
         if (username === currentChatUser) userItem.classList.add('active');
         
+        // Аватарка
+        const avatarUrl = typeof user === 'string' ? null : user.avatar_url;
+        let avatarElement;
+        if (avatarUrl) {
+            avatarElement = document.createElement('img');
+            avatarElement.src = avatarUrl;
+            avatarElement.alt = username;
+            avatarElement.className = 'user-list-avatar';
+        } else {
+            avatarElement = document.createElement('div');
+            avatarElement.className = 'user-list-avatar-placeholder';
+            avatarElement.textContent = username.substring(0, 1).toUpperCase();
+        }
+        
         const statusDot = document.createElement('div');
         statusDot.className = 'user-status';
         
@@ -533,6 +582,7 @@ function updateUsersList() {
         const userName = document.createElement('span');
         userName.textContent = username;
         
+        userItem.appendChild(avatarElement);
         userItem.appendChild(statusDot);
         userItem.appendChild(userName);
         

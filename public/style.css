@@ -241,15 +241,40 @@ body {
     align-items: center;
     gap: 10px;
     min-height: 50px;
+    position: relative;
 }
 
 .user-item:hover {
     background: #f5f5f5;
 }
 
-.user-item.private-chat {
+.user-item.active {
     background: rgba(102, 126, 234, 0.05);
     border-left: 3px solid #667eea;
+}
+
+.user-list-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+    border: 2px solid #667eea;
+}
+
+.user-list-avatar-placeholder {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    font-size: 14px;
+    flex-shrink: 0;
+    border: 2px solid #667eea;
 }
 
 .user-avatar {
@@ -286,13 +311,79 @@ body {
     background: #ff4757;
     color: white;
     border-radius: 50%;
-    width: 20px;
-    height: 20px;
+    width: 24px;
+    height: 24px;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 11px;
+    font-size: 12px;
+    font-weight: 700;
+    flex-shrink: 0;
+    margin-left: auto;
+    box-shadow: 0 2px 4px rgba(255, 71, 87, 0.3);
+}
+
+body.dark-theme .unread-badge {
+    background: #ff4757;
+    color: white;
+    box-shadow: 0 2px 4px rgba(255, 71, 87, 0.5);
+}
+
+/* Баннер для запроса разрешения на уведомления */
+.notification-permission-banner {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-shrink: 0;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.banner-content {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    width: 100%;
+}
+
+.banner-buttons {
+    display: flex;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.banner-btn {
+    padding: 6px 12px;
+    border: none;
+    border-radius: 4px;
+    font-size: 13px;
     font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    min-height: 32px;
+}
+
+.banner-btn.allow {
+    background: white;
+    color: #667eea;
+}
+
+.banner-btn.allow:hover {
+    opacity: 0.9;
+    transform: translateY(-1px);
+}
+
+.banner-btn.dismiss {
+    background: rgba(255, 255, 255, 0.2);
+    color: white;
+}
+
+.banner-btn.dismiss:hover {
+    background: rgba(255, 255, 255, 0.3);
 }
 
 /* Чат контейнер */
@@ -1431,6 +1522,15 @@ body.dark-theme .user-item:hover {
 body.dark-theme .user-item.active {
     background: rgba(102, 126, 234, 0.15);
     border-left: 3px solid #667eea;
+}
+
+body.dark-theme .user-list-avatar {
+    border-color: #667eea;
+}
+
+body.dark-theme .user-list-avatar-placeholder {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-color: #667eea;
 }
 
 body.dark-theme .chat-header {

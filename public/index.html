@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, shrink-to-fit=no">
     <title>Родня - Социальная сеть</title>
-    <link rel="stylesheet" href="style.css?v=14.4">
+    <link rel="stylesheet" href="style.css?v=14.7">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#4facfe">
@@ -62,6 +62,17 @@
                 </button>
             </div>
         </header>
+
+        <!-- Баннер для запроса разрешения на уведомления -->
+        <div class="notification-permission-banner" id="notification-permission-banner" style="display: none;">
+            <div class="banner-content">
+                <span>Включите уведомления, чтобы не пропустить сообщения</span>
+                <div class="banner-buttons">
+                    <button class="banner-btn allow" id="allow-notifications-btn">Включить</button>
+                    <button class="banner-btn dismiss" id="dismiss-notifications-btn">Позже</button>
+                </div>
+            </div>
+        </div>
 
         <main class="main-content">
             <aside class="sidebar">
@@ -245,7 +256,7 @@
     </div>
 
     <script src="/socket.io/socket.io.js"></script>
-    <script src="script.js?v=14.4"></script>
+    <script src="script.js?v=14.7"></script>
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
