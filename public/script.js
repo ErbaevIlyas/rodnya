@@ -776,6 +776,40 @@ imageViewerModal.addEventListener('click', (e) => {
     }
 });
 
+// Видео модал
+const videoViewerModal = document.getElementById('video-viewer-modal');
+const viewerVideo = document.getElementById('viewer-video');
+const closeVideoViewerBtn = document.getElementById('close-video-viewer');
+const videoPlayBtn = document.getElementById('video-play-btn');
+
+closeVideoViewerBtn.addEventListener('click', () => {
+    videoViewerModal.classList.remove('active');
+    viewerVideo.pause();
+});
+
+videoViewerModal.addEventListener('click', (e) => {
+    if (e.target === videoViewerModal) {
+        videoViewerModal.classList.remove('active');
+        viewerVideo.pause();
+    }
+});
+
+viewerVideo.addEventListener('play', () => {
+    videoPlayBtn.innerHTML = '<i class="fas fa-pause"></i>';
+});
+
+viewerVideo.addEventListener('pause', () => {
+    videoPlayBtn.innerHTML = '<i class="fas fa-play"></i>';
+});
+
+videoPlayBtn.addEventListener('click', () => {
+    if (viewerVideo.paused) {
+        viewerVideo.play();
+    } else {
+        viewerVideo.pause();
+    }
+});
+
 // Полноэкранный просмотр картинок
 const fullscreenImageModal = document.getElementById('fullscreen-image-modal');
 const fullscreenImage = document.getElementById('fullscreen-image');
@@ -1252,14 +1286,24 @@ function removeWelcomeMessage() {
 // Предварительный просмотр медиа
 function getMediaPreview(url, mimetype, filename) {
     if (mimetype.startsWith('image/')) {
-        return `<img src="${url}" alt="${filename}" class="message-image" onclick="openImageViewer('${url}')">`;
+        return `
+            <div class="message-image-container" onclick="openImageViewer('${url}')">
+                <img src="${url}" alt="${filename}" class="message-image">
+                <a href="${url}" download="${filename}" class="image-download-btn" title="Скачать картинку" onclick="event.stopPropagation()">
+                    <i class="fas fa-download"></i>
+                </a>
+            </div>
+        `;
     }
     
     if (mimetype.startsWith('video/')) {
         return `
-            <div class="message-video-container">
-                <video src="${url}" controls class="message-video"></video>
-                <a href="${url}" download="${filename}" class="video-download-btn" title="Скачать видео">
+            <div class="message-video-container" onclick="openVideoViewer('${url}')">
+                <video src="${url}" class="message-video"></video>
+                <div class="video-play-overlay">
+                    <i class="fas fa-play"></i>
+                </div>
+                <a href="${url}" download="${filename}" class="video-download-btn" title="Скачать видео" onclick="event.stopPropagation()">
                     <i class="fas fa-download"></i>
                 </a>
             </div>
@@ -1298,6 +1342,15 @@ function getMediaPreview(url, mimetype, filename) {
 function openImageViewer(url) {
     viewerImage.src = url;
     imageViewerModal.classList.add('active');
+}
+
+// Открытие видео в модале
+function openVideoViewer(url) {
+    const videoViewerModal = document.getElementById('video-viewer-modal');
+    const viewerVideo = document.getElementById('viewer-video');
+    viewerVideo.src = url;
+    videoViewerModal.classList.add('active');
+    viewerVideo.play();
 }
 
 // ===== AVATAR EDITOR =====

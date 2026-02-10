@@ -106,7 +106,62 @@ const upload = multer({
 
 // Статические файлы
 app.use(express.static('public'));
-app.use('/uploads', express.static('uploads'));
+
+// Специальный endpoint для скачивания видео в высоком качестве
+app.get('/uploads/:filename', (req, res) => {
+    const filename = req.params.filename;
+    const filepath = path.join(__dirname, 'uploads', filename);
+    
+    // Проверяем что файл существует
+    if (!fs.existsSync(filepath)) {
+        return res.status(404).json({ error: 'Файл не найден' });
+    }
+    
+    const stat = fs.statSync(filepath);
+    const fileSize = stat.size;
+    
+    // Определяем тип контента
+    const ext = path.extname(filename).toLowerCase();
+    let contentType = 'application/octet-stream';
+    
+    if (ext === '.mp4' || ext === '.webm' || ext === '.mov' || ext === '.avi') {
+        contentType = 'video/' + ext.slice(1);
+    } else if (ext === '.jpg' || ext === '.jpeg' || ext === '.png' || ext === '.gif' || ext === '.webp') {
+        contentType = 'image/' + (ext === '.jpg' ? 'jpeg' : ext.slice(1));
+    } else if (ext === '.mp3' || ext === '.wav' || ext === '.ogg') {
+        contentType = 'audio/' + ext.slice(1);
+    }
+    
+    // Устанавливаем правильные headers для скачивания
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Content-Length', fileSize);
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Accept-Ranges', 'bytes');
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    
+    // Поддержка range requests для видео
+    if (req.headers.range) {
+        const parts = req.headers.range.replace(/bytes=/, '').split('-');
+        const start = parseInt(parts[0], 10);
+        const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+        const chunksize = (end - start) + 1;
+        
+        res.writeHead(206, {
+            'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+            'Accept-Ranges': 'bytes',
+            'Content-Length': chunksize,
+            'Content-Type': contentType
+        });
+        
+        fs.createReadStream(filepath, { start, end }).pipe(res);
+    } else {
+        res.writeHead(200, {
+            'Content-Length': fileSize,
+            'Content-Type': contentType
+        });
+        fs.createReadStream(filepath).pipe(res);
+    }
+});
 
 // Отключаем кеш для всех файлов
 app.use((req, res, next) => {
@@ -141,23 +196,6 @@ app.post('/upload', upload.single('file'), (req, res) => {
         size: req.file.size,
         url: `/uploads/${req.file.filename}`
     });
-});
-
-// Скачивание файлов с правильными headers
-app.get('/uploads/:filename', (req, res) => {
-    const filename = req.params.filename;
-    const filepath = path.join(__dirname, 'uploads', filename);
-    
-    // Проверяем что файл существует
-    if (!fs.existsSync(filepath)) {
-        return res.status(404).json({ error: 'Файл не найден' });
-    }
-    
-    // Устанавливаем правильные headers для скачивания
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-    res.setHeader('Content-Type', 'application/octet-stream');
-    
-    res.download(filepath);
 });
 
 // Socket.IO
