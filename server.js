@@ -111,17 +111,14 @@ app.use(express.static('public'));
 // Специальный endpoint для скачивания видео в высоком качестве
 app.get('/uploads/:filename', (req, res) => {
     let filename = req.params.filename;
-    
-    // Если запрашивают сжатую версию, используем её для быстрой загрузки в чате
-    // Если скачивают, используем оригинал
     const isDownload = req.query.download === 'true';
     
-    if (!isDownload && filename.startsWith('compressed-')) {
-        // Используем сжатую версию для просмотра в чате
-    } else if (!isDownload && !filename.startsWith('compressed-')) {
-        // Проверяем есть ли сжатая версия для просмотра
+    // Если это не скачивание и файл не сжатый, проверяем есть ли сжатая версия
+    if (!isDownload && !filename.startsWith('compressed-')) {
         const compressedFilename = `compressed-${filename}`;
         const compressedPath = path.join(__dirname, 'uploads', compressedFilename);
+        
+        // Если сжатая версия существует, используем её
         if (fs.existsSync(compressedPath)) {
             filename = compressedFilename;
         }

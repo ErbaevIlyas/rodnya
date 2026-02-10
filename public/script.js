@@ -1393,11 +1393,15 @@ function removeWelcomeMessage() {
 // Предварительный просмотр медиа
 function getMediaPreview(url, mimetype, filename) {
     if (mimetype.startsWith('image/')) {
-        // Используем сжатую версию для быстрой загрузки в чате
-        const compressedUrl = url.includes('compressed-') ? url : url.replace('/uploads/', '/uploads/compressed-');
+        // Для GIF используем оригинал, для остальных - сжатую версию
+        let displayUrl = url;
+        if (mimetype !== 'image/gif' && !url.includes('compressed-')) {
+            displayUrl = url.replace('/uploads/', '/uploads/compressed-');
+        }
+        
         return `
             <div class="message-image-container" onclick="openImageViewer('${url}')">
-                <img src="${compressedUrl}" alt="${filename}" class="message-image">
+                <img src="${displayUrl}" alt="${filename}" class="message-image">
                 <a href="${url}?download=true" download="${filename}" class="image-download-btn" title="Скачать картинку" onclick="event.stopPropagation()">
                     <i class="fas fa-download"></i>
                 </a>
