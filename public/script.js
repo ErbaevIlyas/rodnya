@@ -1393,16 +1393,16 @@ function removeWelcomeMessage() {
 // Предварительный просмотр медиа
 function getMediaPreview(url, mimetype, filename) {
     if (mimetype.startsWith('image/')) {
-        // Для GIF используем оригинал, для остальных - сжатую версию
+        // Для всех изображений (включая GIF) используем сжатую версию для быстрой загрузки
         let displayUrl = url;
-        if (mimetype !== 'image/gif' && !url.includes('compressed-')) {
+        if (!url.includes('compressed-')) {
             displayUrl = url.replace('/uploads/', '/uploads/compressed-');
         }
         
         return `
             <div class="message-image-container" onclick="openImageViewer('${url}')">
                 <img src="${displayUrl}" alt="${filename}" class="message-image">
-                <a href="${url}?download=true" download="${filename}" class="image-download-btn" title="Скачать картинку" onclick="event.stopPropagation()">
+                <a href="${url}?download=true" download="${filename}" class="image-download-btn" title="Скачать" onclick="event.stopPropagation()">
                     <i class="fas fa-download"></i>
                 </a>
             </div>
@@ -1453,7 +1453,9 @@ function getMediaPreview(url, mimetype, filename) {
 
 // Открытие картинки в модале
 function openImageViewer(url) {
-    viewerImage.src = url;
+    // Если это сжатая версия, используем оригинал для просмотра
+    const originalUrl = url.includes('compressed-') ? url.replace('compressed-', '') : url;
+    viewerImage.src = originalUrl;
     imageViewerModal.classList.add('active');
 }
 
