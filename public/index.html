@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, shrink-to-fit=no">
     <title>Родня - Социальная сеть</title>
-    <link rel="stylesheet" href="style.css?v=13.6">
+    <link rel="stylesheet" href="style.css?v=13.7">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#4facfe">
@@ -120,7 +120,16 @@
                         <div class="image-viewer-content">
                             <button class="close-viewer" id="close-viewer">&times;</button>
                             <img id="viewer-image" src="" alt="Image">
+                            <button class="fullscreen-viewer-btn" id="fullscreen-viewer-btn" title="На весь экран">
+                                <i class="fas fa-expand"></i>
+                            </button>
                         </div>
+                    </div>
+                    
+                    <!-- Полноэкранный просмотр картинок -->
+                    <div class="fullscreen-image-modal" id="fullscreen-image-modal">
+                        <button class="close-fullscreen" id="close-fullscreen">&times;</button>
+                        <img id="fullscreen-image" src="" alt="Image">
                     </div>
                     
                     <div class="input-area">
@@ -213,7 +222,7 @@
     </div>
 
     <script src="/socket.io/socket.io.js"></script>
-    <script src="script.js?v=13.6"></script>
+    <script src="script.js?v=13.7"></script>
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {

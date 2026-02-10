@@ -776,6 +776,31 @@ imageViewerModal.addEventListener('click', (e) => {
     }
 });
 
+// Полноэкранный просмотр картинок
+const fullscreenImageModal = document.getElementById('fullscreen-image-modal');
+const fullscreenImage = document.getElementById('fullscreen-image');
+const closeFullscreenBtn = document.getElementById('close-fullscreen');
+const fullscreenViewerBtn = document.getElementById('fullscreen-viewer-btn');
+
+fullscreenViewerBtn.addEventListener('click', () => {
+    const currentImageSrc = viewerImage.src;
+    fullscreenImage.src = currentImageSrc;
+    imageViewerModal.classList.remove('active');
+    fullscreenImageModal.classList.add('active');
+});
+
+closeFullscreenBtn.addEventListener('click', () => {
+    fullscreenImageModal.classList.remove('active');
+    imageViewerModal.classList.add('active');
+});
+
+fullscreenImageModal.addEventListener('click', (e) => {
+    if (e.target === fullscreenImageModal) {
+        fullscreenImageModal.classList.remove('active');
+        imageViewerModal.classList.add('active');
+    }
+});
+
 // Отправка изображения с подписью
 sendPreviewBtn.addEventListener('click', () => {
     if (currentPreviewFile) {
