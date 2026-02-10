@@ -962,53 +962,78 @@ async function uploadFile(file, caption = '') {
                 const percentComplete = (e.loaded / e.total) * 100;
                 const progressFill = uploadStatusDiv.querySelector('.upload-progress-fill');
                 const percentSpan = uploadStatusDiv.querySelector('.upload-percent');
-                progressFill.style.width = percentComplete + '%';
-                percentSpan.textContent = Math.round(percentComplete) + '%';
+                if (progressFill && percentSpan) {
+                    progressFill.style.width = percentComplete + '%';
+                    percentSpan.textContent = Math.round(percentComplete) + '%';
+                }
             }
         });
         
         xhr.addEventListener('load', () => {
             if (xhr.status === 200) {
-                const result = JSON.parse(xhr.responseText);
-                
-                // Удаляем статус загрузки
-                uploadStatusDiv.remove();
-                
-                if (currentChatUser) {
-                    socket.emit('send-private-file', {
-                        recipientUsername: currentChatUser,
-                        filename: result.filename,
-                        originalname: result.originalname,
-                        url: result.url,
-                        mimetype: result.mimetype,
-                        caption: caption
-                    });
-                } else {
-                    socket.emit('send-file', {
-                        filename: result.filename,
-                        originalname: result.originalname,
-                        url: result.url,
-                        mimetype: result.mimetype,
-                        caption: caption
-                    });
+                try {
+                    const result = JSON.parse(xhr.responseText);
+                    
+                    // Удаляем статус загрузки
+                    if (uploadStatusDiv.parentNode) {
+                        uploadStatusDiv.remove();
+                    }
+                    
+                    if (currentChatUser) {
+                        socket.emit('send-private-file', {
+                            recipientUsername: currentChatUser,
+                            filename: result.filename,
+                            originalname: result.originalname,
+                            url: result.url,
+                            mimetype: result.mimetype,
+                            caption: caption
+                        });
+                    } else {
+                        socket.emit('send-file', {
+                            filename: result.filename,
+                            originalname: result.originalname,
+                            url: result.url,
+                            mimetype: result.mimetype,
+                            caption: caption
+                        });
+                    }
+                    
+                    removeWelcomeMessage();
+                } catch (e) {
+                    console.error('Ошибка парсинга ответа:', e);
+                    if (uploadStatusDiv.parentNode) {
+                        uploadStatusDiv.remove();
+                    }
+                    alert('Ошибка загрузки файла');
                 }
-                
-                removeWelcomeMessage();
             } else {
-                uploadStatusDiv.remove();
-                alert('Ошибка загрузки файла');
+                if (uploadStatusDiv.parentNode) {
+                    uploadStatusDiv.remove();
+                }
+                alert('Ошибка загрузки файла: ' + xhr.status);
             }
         });
         
         xhr.addEventListener('error', () => {
-            uploadStatusDiv.remove();
+            if (uploadStatusDiv.parentNode) {
+                uploadStatusDiv.remove();
+            }
             alert('Ошибка загрузки файла');
+        });
+        
+        xhr.addEventListener('abort', () => {
+            if (uploadStatusDiv.parentNode) {
+                uploadStatusDiv.remove();
+            }
         });
         
         xhr.open('POST', '/upload');
         xhr.send(formData);
     } catch (error) {
-        uploadStatusDiv.remove();
+        if (uploadStatusDiv.parentNode) {
+            uploadStatusDiv.remove();
+        }
+        console.error('Ошибка:', error);
         alert('Ошибка загрузки файла: ' + error.message);
     }
 }
