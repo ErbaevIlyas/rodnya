@@ -228,31 +228,6 @@ app.post('/upload', upload.single('file'), async (req, res) => {
             }
         }
         
-        // Оптимизация GIF
-        if (mimetype === 'image/gif') {
-            try {
-                const compressedFilename = `compressed-${filename}`;
-                const compressedPath = path.join(__dirname, 'uploads', compressedFilename);
-                
-                // Оптимизируем GIF: уменьшаем размер и количество кадров
-                await sharp(filepath, { animated: true })
-                    .resize(1280, 720, {
-                        fit: 'inside',
-                        withoutEnlargement: true
-                    })
-                    .gif({ 
-                        effort: 10,  // Максимальная оптимизация
-                        delay: 50    // Минимальная задержка между кадрами
-                    })
-                    .toFile(compressedPath);
-                
-                console.log('✅ GIF оптимизирован:', filename);
-            } catch (error) {
-                console.log('⚠️ Ошибка оптимизации GIF:', error.message);
-                // Если ошибка, используем оригинал
-            }
-        }
-        
         res.set('Content-Type', 'application/json');
         res.json({
             filename: filename,

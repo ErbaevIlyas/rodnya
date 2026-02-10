@@ -974,10 +974,12 @@ async function uploadFile(file, caption = '') {
                 try {
                     const result = JSON.parse(xhr.responseText);
                     
-                    // Удаляем статус загрузки
-                    if (uploadStatusDiv.parentNode) {
-                        uploadStatusDiv.remove();
-                    }
+                    // Удаляем статус загрузки с небольшой задержкой
+                    setTimeout(() => {
+                        if (uploadStatusDiv.parentNode) {
+                            uploadStatusDiv.remove();
+                        }
+                    }, 300);
                     
                     if (currentChatUser) {
                         socket.emit('send-private-file', {
@@ -1393,9 +1395,9 @@ function removeWelcomeMessage() {
 // Предварительный просмотр медиа
 function getMediaPreview(url, mimetype, filename) {
     if (mimetype.startsWith('image/')) {
-        // Для всех изображений (включая GIF) используем сжатую версию для быстрой загрузки
+        // Для GIF используем оригинал, для остальных - сжатую версию
         let displayUrl = url;
-        if (!url.includes('compressed-')) {
+        if (mimetype !== 'image/gif' && !url.includes('compressed-')) {
             displayUrl = url.replace('/uploads/', '/uploads/compressed-');
         }
         
