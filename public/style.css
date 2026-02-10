@@ -497,6 +497,41 @@ body {
     border-radius: 6px;
 }
 
+.message-video-container {
+    position: relative;
+    display: inline-block;
+}
+
+.message-audio-container {
+    position: relative;
+    display: inline-block;
+}
+
+.video-download-btn, .audio-download-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: rgba(102, 126, 234, 0.9);
+    color: white;
+    border: none;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    font-size: 16px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    text-decoration: none;
+    z-index: 5;
+}
+
+.video-download-btn:hover, .audio-download-btn:hover {
+    background: rgba(102, 126, 234, 1);
+    transform: scale(1.1);
+}
+
 .message-caption {
     font-size: 12px;
     margin-top: 2px;
@@ -1637,6 +1672,16 @@ body.dark-theme .fullscreen-viewer-btn {
 }
 
 body.dark-theme .fullscreen-viewer-btn:hover {
+    background: rgba(102, 126, 234, 1);
+}
+
+body.dark-theme .video-download-btn, 
+body.dark-theme .audio-download-btn {
+    background: rgba(102, 126, 234, 0.9);
+}
+
+body.dark-theme .video-download-btn:hover, 
+body.dark-theme .audio-download-btn:hover {
     background: rgba(102, 126, 234, 1);
 }
 

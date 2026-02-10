@@ -1256,11 +1256,25 @@ function getMediaPreview(url, mimetype, filename) {
     }
     
     if (mimetype.startsWith('video/')) {
-        return `<video src="${url}" controls class="message-video"></video>`;
+        return `
+            <div class="message-video-container">
+                <video src="${url}" controls class="message-video"></video>
+                <a href="${url}" download="${filename}" class="video-download-btn" title="Скачать видео">
+                    <i class="fas fa-download"></i>
+                </a>
+            </div>
+        `;
     }
     
     if (mimetype.startsWith('audio/')) {
-        return `<audio src="${url}" controls class="message-audio"></audio>`;
+        return `
+            <div class="message-audio-container">
+                <audio src="${url}" controls class="message-audio"></audio>
+                <a href="${url}" download="${filename}" class="audio-download-btn" title="Скачать аудио">
+                    <i class="fas fa-download"></i>
+                </a>
+            </div>
+        `;
     }
     
     // Для документов показываем иконку и ссылку
@@ -1274,7 +1288,7 @@ function getMediaPreview(url, mimetype, filename) {
     };
     
     const icon = getFileIcon(filename);
-    return `<a href="${url}" target="_blank" class="file-link" style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: #f0f0f0; border-radius: 6px; text-decoration: none; color: #333; width: fit-content;">
+    return `<a href="${url}" download="${filename}" class="file-link" style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: #f0f0f0; border-radius: 6px; text-decoration: none; color: #333; width: fit-content;">
         <span style="font-size: 20px;">${icon}</span>
         <span style="font-size: 13px; word-break: break-all;">${filename}</span>
     </a>`;
