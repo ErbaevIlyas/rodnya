@@ -403,29 +403,48 @@ profileSaveBtn.addEventListener('click', () => {
 // Подписка на push notifications
 async function subscribeToPushNotifications() {
     try {
+        console.log('🔄 Начинаем подписку на push...');
+        
+        if (!('serviceWorker' in navigator)) {
+            console.error('❌ Service Worker не поддерживается');
+            return;
+        }
+        
         const registration = await navigator.serviceWorker.ready;
+        console.log('✅ Service Worker готов');
         
         // Проверяем есть ли уже подписка
         let subscription = await registration.pushManager.getSubscription();
         
-        if (!subscription) {
-            // Создаём новую подписку (без VAPID ключа для простоты)
+        if (subscription) {
+            console.log('✅ Подписка уже существует, используем её');
+        } else {
+            console.log('🔄 Создаём новую подписку...');
             subscription = await registration.pushManager.subscribe({
                 userVisibleOnly: true,
                 applicationServerKey: urlBase64ToUint8Array('BEl62iUZbU4z7gxWrb94Q6-q6XJ5Q7wXewQIdyT0Z1ySLn0d8l1sp7PV2xF0dWUzchTDslHCMwYVJyWP86VlIXM')
             });
-            
             console.log('✅ Новая подписка создана');
-        } else {
-            console.log('✅ Подписка уже существует');
         }
         
         // Отправляем подписку на сервер
-        if (currentUsername) {
+        if (currentUsername && socket.connected) {
             console.log('📤 Отправляем подписку на сервер для:', currentUsername);
+            console.log('📊 Данные подписки:', {
+                endpoint: subscription.endpoint.substring(0, 50) + '...',
+                keys: subscription.getKey ? 'есть' : 'нет'
+            });
+            
             socket.emit('subscribe-to-push', {
                 username: currentUsername,
                 subscription: subscription.toJSON()
+            });
+            
+            console.log('✅ Подписка отправлена на сервер');
+        } else {
+            console.error('❌ Не удалось отправить подписку:', {
+                username: currentUsername,
+                connected: socket.connected
             });
         }
     } catch (error) {
@@ -462,11 +481,13 @@ darkThemeBtn.addEventListener('click', () => {
 allowNotificationsBtn.addEventListener('click', () => {
     if ('Notification' in window) {
         Notification.requestPermission().then((permission) => {
-            console.log('Разрешение на уведомления:', permission);
+            console.log('🔔 Разрешение на уведомления:', permission);
             notificationPermissionBanner.style.display = 'none';
             if (permission === 'granted') {
                 console.log('✅ Push notifications разрешены');
-                subscribeToPushNotifications();
+                setTimeout(() => {
+                    subscribeToPushNotifications();
+                }, 500);
             }
         });
     }
