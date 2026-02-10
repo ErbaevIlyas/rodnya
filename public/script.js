@@ -732,19 +732,19 @@ function showVideoPreview(file) {
         previewImage.src = e.target.result;
         previewImage.style.display = 'none';
         
+        const previewContainer = document.querySelector('.preview-image-container');
+        const existingVideo = previewContainer.querySelector('video');
+        if (existingVideo) existingVideo.remove();
+        
         const videoElement = document.createElement('video');
         videoElement.src = e.target.result;
         videoElement.style.maxWidth = '100%';
-        videoElement.style.maxHeight = '60vh';
-        videoElement.style.borderRadius = '10px';
-        videoElement.style.marginBottom = '1rem';
+        videoElement.style.maxHeight = '100%';
+        videoElement.style.borderRadius = '6px';
+        videoElement.style.objectFit = 'contain';
         videoElement.controls = true;
         
-        const previewContent = document.querySelector('.preview-content');
-        const existingVideo = previewContent.querySelector('video');
-        if (existingVideo) existingVideo.remove();
-        
-        previewContent.insertBefore(videoElement, previewContent.querySelector('.preview-controls'));
+        previewContainer.appendChild(videoElement);
         
         imageCaptionInput.value = '';
         imagePreviewModal.classList.add('active');
