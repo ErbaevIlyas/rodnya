@@ -6,6 +6,7 @@ const path = require('path');
 const fs = require('fs');
 const sharp = require('sharp');
 const { Pool } = require('pg');
+const webpush = require('web-push');
 require('dotenv').config();
 
 const app = express();
@@ -80,6 +81,22 @@ async function initializeDB() {
 
 initializeDB();
 console.log('✅ Подключено к PostgreSQL');
+
+// Инициализация web-push для уведомлений
+// Генерируем VAPID ключи если их нет в .env
+const vapidPublicKey = process.env.VAPID_PUBLIC_KEY || 'BEl62iUZbU4z7gxWrb94Q6-q6XJ5Q7wXewQIdyT0Z1ySLn0d8l1sp7PV2xF0dWUzchTDslHCMwYVJyWP86VlIXM';
+const vapidPrivateKey = process.env.VAPID_PRIVATE_KEY || 'GZIP2z-p8UHtBTami0357IB_5p9rHt2Wy6wGaAw1gIc';
+
+if (vapidPublicKey && vapidPrivateKey) {
+    webpush.setVapidDetails(
+        'mailto:example@example.com',
+        vapidPublicKey,
+        vapidPrivateKey
+    );
+    console.log('✅ Web-push инициализирован');
+} else {
+    console.warn('⚠️ VAPID ключи не найдены, push notifications могут не работать');
+}
 
 // Создаем папку для загрузок
 if (!fs.existsSync('uploads')) {
@@ -245,9 +262,21 @@ app.post('/upload', upload.single('file'), async (req, res) => {
 // Функция отправки push notifications
 function sendPushNotification(subscription, data) {
     try {
-        // Для простоты используем встроенный механизм браузера
-        // В продакшене нужно использовать web-push библиотеку
-        console.log('📢 Push отправлен:', data.title);
+        const payload = JSON.stringify({
+            title: data.title,
+            body: data.body,
+            icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y="75" font-size="75">👥</text></svg>',
+            badge: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y="75" font-size="75">👥</text></svg>',
+            tag: data.tag || 'rodnya-notification'
+        });
+        
+        webpush.sendNotification(subscription, payload)
+            .then(() => {
+                console.log('✅ Push отправлен:', data.title);
+            })
+            .catch((error) => {
+                console.error('❌ Ошибка отправки push:', error.message);
+            });
     } catch (error) {
         console.error('Ошибка отправки push:', error);
     }
@@ -542,14 +571,18 @@ io.on('connection', (socket) => {
             socket.emit('private-message', formattedMessage);
             
             if (recipientSocketId) {
+                // Пользователь онлайн - отправляем через socket
                 io.to(recipientSocketId).emit('private-message', formattedMessage);
-            } else if (recipientUser && recipientUser.pushSubscription) {
-                // Отправляем push notification если пользователь офлайн
-                sendPushNotification(recipientUser.pushSubscription, {
-                    title: `Сообщение от ${senderUsername}`,
-                    body: message.substring(0, 100),
-                    tag: `message-${senderUsername}`
-                });
+            } else {
+                // Пользователь офлайн - отправляем push notification если есть подписка
+                if (recipientUser && recipientUser.pushSubscription) {
+                    sendPushNotification(recipientUser.pushSubscription, {
+                        title: `Сообщение от ${senderUsername}`,
+                        body: message.substring(0, 100),
+                        tag: `message-${senderUsername}`
+                    });
+                }
+                console.log(`📢 Пользователь ${recipientUsername} офлайн, push отправлен`);
             }
         } catch (error) {
             console.error('Ошибка отправки приватного сообщения:', error);

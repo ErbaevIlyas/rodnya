@@ -440,10 +440,11 @@ darkThemeBtn.addEventListener('click', () => {
 allowNotificationsBtn.addEventListener('click', () => {
     if ('Notification' in window) {
         Notification.requestPermission().then((permission) => {
+            console.log('Разрешение на уведомления:', permission);
+            notificationPermissionBanner.style.display = 'none';
             if (permission === 'granted') {
                 console.log('✅ Push notifications разрешены');
                 subscribeToPushNotifications();
-                notificationPermissionBanner.style.display = 'none';
             }
         });
     }
