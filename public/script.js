@@ -935,39 +935,80 @@ async function uploadFile(file, caption = '') {
     const formData = new FormData();
     formData.append('file', file);
     
+    // Показываем статус загрузки
+    const uploadStatusDiv = document.createElement('div');
+    uploadStatusDiv.className = 'upload-status';
+    uploadStatusDiv.id = `upload-${Date.now()}`;
+    uploadStatusDiv.innerHTML = `
+        <div class="upload-progress-container">
+            <div class="upload-info">
+                <span class="upload-filename">${file.name}</span>
+                <span class="upload-percent">0%</span>
+            </div>
+            <div class="upload-progress-bar">
+                <div class="upload-progress-fill" style="width: 0%"></div>
+            </div>
+        </div>
+    `;
+    messagesContainer.appendChild(uploadStatusDiv);
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    
     try {
-        const response = await fetch('/upload', {
-            method: 'POST',
-            body: formData
+        const xhr = new XMLHttpRequest();
+        
+        // Отслеживаем прогресс загрузки
+        xhr.upload.addEventListener('progress', (e) => {
+            if (e.lengthComputable) {
+                const percentComplete = (e.loaded / e.total) * 100;
+                const progressFill = uploadStatusDiv.querySelector('.upload-progress-fill');
+                const percentSpan = uploadStatusDiv.querySelector('.upload-percent');
+                progressFill.style.width = percentComplete + '%';
+                percentSpan.textContent = Math.round(percentComplete) + '%';
+            }
         });
         
-        const result = await response.json();
-        
-        if (response.ok) {
-            if (currentChatUser) {
-                socket.emit('send-private-file', {
-                    recipientUsername: currentChatUser,
-                    filename: result.filename,
-                    originalname: result.originalname,
-                    url: result.url,
-                    mimetype: result.mimetype,
-                    caption: caption
-                });
+        xhr.addEventListener('load', () => {
+            if (xhr.status === 200) {
+                const result = JSON.parse(xhr.responseText);
+                
+                // Удаляем статус загрузки
+                uploadStatusDiv.remove();
+                
+                if (currentChatUser) {
+                    socket.emit('send-private-file', {
+                        recipientUsername: currentChatUser,
+                        filename: result.filename,
+                        originalname: result.originalname,
+                        url: result.url,
+                        mimetype: result.mimetype,
+                        caption: caption
+                    });
+                } else {
+                    socket.emit('send-file', {
+                        filename: result.filename,
+                        originalname: result.originalname,
+                        url: result.url,
+                        mimetype: result.mimetype,
+                        caption: caption
+                    });
+                }
+                
+                removeWelcomeMessage();
             } else {
-                socket.emit('send-file', {
-                    filename: result.filename,
-                    originalname: result.originalname,
-                    url: result.url,
-                    mimetype: result.mimetype,
-                    caption: caption
-                });
+                uploadStatusDiv.remove();
+                alert('Ошибка загрузки файла');
             }
-            
-            removeWelcomeMessage();
-        } else {
-            alert('Ошибка загрузки файла: ' + result.error);
-        }
+        });
+        
+        xhr.addEventListener('error', () => {
+            uploadStatusDiv.remove();
+            alert('Ошибка загрузки файла');
+        });
+        
+        xhr.open('POST', '/upload');
+        xhr.send(formData);
     } catch (error) {
+        uploadStatusDiv.remove();
         alert('Ошибка загрузки файла: ' + error.message);
     }
 }

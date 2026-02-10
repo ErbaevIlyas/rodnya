@@ -1921,7 +1921,80 @@ body.dark-theme .close-editor:hover {
     color: #e0e0e0;
 }
 
-/* Скрытые кнопки на мобильных */
+/* Статус загрузки */
+.upload-status {
+    display: flex;
+    align-items: center;
+    padding: 12px;
+    background: #f0f0f0;
+    border-radius: 8px;
+    margin: 8px 0;
+    animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.upload-progress-container {
+    width: 100%;
+}
+
+.upload-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+    font-size: 13px;
+}
+
+.upload-filename {
+    color: #333;
+    font-weight: 500;
+    word-break: break-all;
+    flex: 1;
+}
+
+.upload-percent {
+    color: #667eea;
+    font-weight: 600;
+    min-width: 40px;
+    text-align: right;
+}
+
+.upload-progress-bar {
+    width: 100%;
+    height: 6px;
+    background: #e0e0e0;
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.upload-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+    transition: width 0.2s ease-out;
+    border-radius: 3px;
+}
+
+body.dark-theme .upload-status {
+    background: #2a2a2a;
+}
+
+body.dark-theme .upload-filename {
+    color: #e0e0e0;
+}
+
+body.dark-theme .upload-progress-bar {
+    background: #333;
+}
 .delete-btn, .reply-btn {
     display: none;
 }

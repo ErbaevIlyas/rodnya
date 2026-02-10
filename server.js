@@ -210,8 +210,8 @@ app.post('/upload', upload.single('file'), async (req, res) => {
         const filepath = path.join(__dirname, 'uploads', filename);
         const mimetype = req.file.mimetype;
         
-        // Обработка изображений
-        if (mimetype.startsWith('image/')) {
+        // Обработка изображений (кроме GIF)
+        if (mimetype.startsWith('image/') && mimetype !== 'image/gif') {
             try {
                 // Создаём сжатую версию для быстрой загрузки
                 const compressedFilename = `compressed-${filename}`;
