@@ -411,20 +411,42 @@ async function subscribeToPushNotifications() {
         if (!subscription) {
             // Создаём новую подписку (без VAPID ключа для простоты)
             subscription = await registration.pushManager.subscribe({
-                userVisibleOnly: true
+                userVisibleOnly: true,
+                applicationServerKey: urlBase64ToUint8Array('BEl62iUZbU4z7gxWrb94Q6-q6XJ5Q7wXewQIdyT0Z1ySLn0d8l1sp7PV2xF0dWUzchTDslHCMwYVJyWP86VlIXM')
             });
             
-            // Отправляем подписку на сервер
-            if (currentUsername) {
-                socket.emit('subscribe-to-push', {
-                    username: currentUsername,
-                    subscription: subscription.toJSON()
-                });
-            }
+            console.log('✅ Новая подписка создана');
+        } else {
+            console.log('✅ Подписка уже существует');
+        }
+        
+        // Отправляем подписку на сервер
+        if (currentUsername) {
+            console.log('📤 Отправляем подписку на сервер для:', currentUsername);
+            socket.emit('subscribe-to-push', {
+                username: currentUsername,
+                subscription: subscription.toJSON()
+            });
         }
     } catch (error) {
-        console.log('Ошибка подписки на push:', error);
+        console.error('❌ Ошибка подписки на push:', error);
     }
+}
+
+// Конвертируем VAPID ключ в правильный формат
+function urlBase64ToUint8Array(base64String) {
+    const padding = '='.repeat((4 - base64String.length % 4) % 4);
+    const base64 = (base64String + padding)
+        .replace(/\-/g, '+')
+        .replace(/_/g, '/');
+
+    const rawData = window.atob(base64);
+    const outputArray = new Uint8Array(rawData.length);
+
+    for (let i = 0; i < rawData.length; ++i) {
+        outputArray[i] = rawData.charCodeAt(i);
+    }
+    return outputArray;
 }
 
 // Переключение темы

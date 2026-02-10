@@ -52,6 +52,17 @@ async function initializeDB() {
         `);
 
         await pool.query(`
+            CREATE TABLE IF NOT EXISTS push_subscriptions (
+                id SERIAL PRIMARY KEY,
+                username VARCHAR(255) NOT NULL,
+                subscription JSONB NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(username)
+            )
+        `);
+        console.log('✅ Таблица push_subscriptions готова');
+
+        await pool.query(`
             CREATE TABLE IF NOT EXISTS messages (
                 id SERIAL PRIMARY KEY,
                 from_user VARCHAR(255) NOT NULL,
@@ -542,6 +553,8 @@ io.on('connection', (socket) => {
             
             const { recipientUsername, message } = data;
             
+            console.log(`💬 Сообщение от ${senderUsername} к ${recipientUsername}`);
+            
             const result = await pool.query(
                 `INSERT INTO messages (from_user, to_user, message, type, is_general, read_status) 
                  VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
@@ -572,20 +585,35 @@ io.on('connection', (socket) => {
             
             if (recipientSocketId) {
                 // Пользователь онлайн - отправляем через socket
+                console.log(`✅ ${recipientUsername} онлайн, отправляем через socket`);
                 io.to(recipientSocketId).emit('private-message', formattedMessage);
             } else {
-                // Пользователь офлайн - отправляем push notification если есть подписка
-                if (recipientUser && recipientUser.pushSubscription) {
-                    sendPushNotification(recipientUser.pushSubscription, {
-                        title: `Сообщение от ${senderUsername}`,
-                        body: message.substring(0, 100),
-                        tag: `message-${senderUsername}`
-                    });
+                // Пользователь офлайн - ищем подписку в БД
+                console.log(`⚠️ ${recipientUsername} офлайн, ищем подписку в БД...`);
+                
+                try {
+                    const subResult = await pool.query(
+                        'SELECT subscription FROM push_subscriptions WHERE username = $1',
+                        [recipientUsername]
+                    );
+                    
+                    if (subResult.rows.length > 0) {
+                        const subscription = subResult.rows[0].subscription;
+                        console.log(`📢 Отправляем push для ${recipientUsername}`);
+                        sendPushNotification(subscription, {
+                            title: `Сообщение от ${senderUsername}`,
+                            body: message.substring(0, 100),
+                            tag: `message-${senderUsername}`
+                        });
+                    } else {
+                        console.log(`❌ Подписка не найдена в БД для ${recipientUsername}`);
+                    }
+                } catch (dbError) {
+                    console.error(`❌ Ошибка при поиске подписки в БД:`, dbError);
                 }
-                console.log(`📢 Пользователь ${recipientUsername} офлайн, push отправлен`);
             }
         } catch (error) {
-            console.error('Ошибка отправки приватного сообщения:', error);
+            console.error('❌ Ошибка отправки приватного сообщения:', error);
         }
     });
     
@@ -746,7 +774,17 @@ io.on('connection', (socket) => {
         try {
             const { username, subscription } = data;
             
-            // Сохраняем подписку в памяти (в продакшене нужна БД)
+            console.log('📨 Получена подписка на push от:', username);
+            
+            // Сохраняем подписку в БД
+            await pool.query(
+                `INSERT INTO push_subscriptions (username, subscription) 
+                 VALUES ($1, $2)
+                 ON CONFLICT (username) DO UPDATE SET subscription = $2`,
+                [username, JSON.stringify(subscription)]
+            );
+            
+            // Также сохраняем в памяти для онлайн пользователей
             if (!connectedUsers.has(socket.id)) {
                 connectedUsers.set(socket.id, { username, socketId: socket.id });
             }
@@ -754,9 +792,9 @@ io.on('connection', (socket) => {
             const user = connectedUsers.get(socket.id);
             user.pushSubscription = subscription;
             
-            console.log('✅ Push подписка получена:', username);
+            console.log('✅ Push подписка сохранена в БД для:', username);
         } catch (error) {
-            console.error('Ошибка подписки на push:', error);
+            console.error('❌ Ошибка подписки на push:', error);
         }
     });
     
