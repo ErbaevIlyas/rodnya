@@ -210,6 +210,20 @@ document.addEventListener('DOMContentLoaded', () => {
     } else {
         loginUsernameInput.focus();
     }
+    
+    // Запрашиваем разрешение на push notifications
+    if ('serviceWorker' in navigator && 'Notification' in window) {
+        if (Notification.permission === 'default') {
+            Notification.requestPermission().then((permission) => {
+                if (permission === 'granted') {
+                    console.log('✅ Push notifications разрешены');
+                    subscribeToPushNotifications();
+                }
+            });
+        } else if (Notification.permission === 'granted') {
+            subscribeToPushNotifications();
+        }
+    }
 });
 
 // Переключение между формами
@@ -367,6 +381,33 @@ avatarInput.addEventListener('change', (e) => {
 profileSaveBtn.addEventListener('click', () => {
     saveProfileData();
 });
+
+// Подписка на push notifications
+async function subscribeToPushNotifications() {
+    try {
+        const registration = await navigator.serviceWorker.ready;
+        
+        // Проверяем есть ли уже подписка
+        let subscription = await registration.pushManager.getSubscription();
+        
+        if (!subscription) {
+            // Создаём новую подписку (без VAPID ключа для простоты)
+            subscription = await registration.pushManager.subscribe({
+                userVisibleOnly: true
+            });
+            
+            // Отправляем подписку на сервер
+            if (currentUsername) {
+                socket.emit('subscribe-to-push', {
+                    username: currentUsername,
+                    subscription: subscription.toJSON()
+                });
+            }
+        }
+    } catch (error) {
+        console.log('Ошибка подписки на push:', error);
+    }
+}
 
 // Переключение темы
 lightThemeBtn.addEventListener('click', () => {
@@ -1286,10 +1327,12 @@ function removeWelcomeMessage() {
 // Предварительный просмотр медиа
 function getMediaPreview(url, mimetype, filename) {
     if (mimetype.startsWith('image/')) {
+        // Используем сжатую версию для быстрой загрузки в чате
+        const compressedUrl = url.includes('compressed-') ? url : url.replace('/uploads/', '/uploads/compressed-');
         return `
             <div class="message-image-container" onclick="openImageViewer('${url}')">
-                <img src="${url}" alt="${filename}" class="message-image">
-                <a href="${url}" download="${filename}" class="image-download-btn" title="Скачать картинку" onclick="event.stopPropagation()">
+                <img src="${compressedUrl}" alt="${filename}" class="message-image">
+                <a href="${url}?download=true" download="${filename}" class="image-download-btn" title="Скачать картинку" onclick="event.stopPropagation()">
                     <i class="fas fa-download"></i>
                 </a>
             </div>
@@ -1303,7 +1346,7 @@ function getMediaPreview(url, mimetype, filename) {
                 <div class="video-play-overlay">
                     <i class="fas fa-play"></i>
                 </div>
-                <a href="${url}" download="${filename}" class="video-download-btn" title="Скачать видео" onclick="event.stopPropagation()">
+                <a href="${url}?download=true" download="${filename}" class="video-download-btn" title="Скачать видео" onclick="event.stopPropagation()">
                     <i class="fas fa-download"></i>
                 </a>
             </div>
@@ -1314,7 +1357,7 @@ function getMediaPreview(url, mimetype, filename) {
         return `
             <div class="message-audio-container">
                 <audio src="${url}" controls class="message-audio"></audio>
-                <a href="${url}" download="${filename}" class="audio-download-btn" title="Скачать аудио">
+                <a href="${url}?download=true" download="${filename}" class="audio-download-btn" title="Скачать аудио">
                     <i class="fas fa-download"></i>
                 </a>
             </div>
@@ -1332,7 +1375,7 @@ function getMediaPreview(url, mimetype, filename) {
     };
     
     const icon = getFileIcon(filename);
-    return `<a href="${url}" download="${filename}" class="file-link" style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: #f0f0f0; border-radius: 6px; text-decoration: none; color: #333; width: fit-content;">
+    return `<a href="${url}?download=true" download="${filename}" class="file-link" style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: #f0f0f0; border-radius: 6px; text-decoration: none; color: #333; width: fit-content;">
         <span style="font-size: 20px;">${icon}</span>
         <span style="font-size: 13px; word-break: break-all;">${filename}</span>
     </a>`;

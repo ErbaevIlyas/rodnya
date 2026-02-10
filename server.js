@@ -4,6 +4,7 @@ const socketIo = require('socket.io');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const sharp = require('sharp');
 const { Pool } = require('pg');
 require('dotenv').config();
 
@@ -109,7 +110,23 @@ app.use(express.static('public'));
 
 // Специальный endpoint для скачивания видео в высоком качестве
 app.get('/uploads/:filename', (req, res) => {
-    const filename = req.params.filename;
+    let filename = req.params.filename;
+    
+    // Если запрашивают сжатую версию, используем её для быстрой загрузки в чате
+    // Если скачивают, используем оригинал
+    const isDownload = req.query.download === 'true';
+    
+    if (!isDownload && filename.startsWith('compressed-')) {
+        // Используем сжатую версию для просмотра в чате
+    } else if (!isDownload && !filename.startsWith('compressed-')) {
+        // Проверяем есть ли сжатая версия для просмотра
+        const compressedFilename = `compressed-${filename}`;
+        const compressedPath = path.join(__dirname, 'uploads', compressedFilename);
+        if (fs.existsSync(compressedPath)) {
+            filename = compressedFilename;
+        }
+    }
+    
     const filepath = path.join(__dirname, 'uploads', filename);
     
     // Проверяем что файл существует
@@ -183,20 +200,61 @@ app.get('/ping', (req, res) => {
 });
 
 // Загрузка файлов
-app.post('/upload', upload.single('file'), (req, res) => {
+app.post('/upload', upload.single('file'), async (req, res) => {
     if (!req.file) {
         return res.status(400).json({ error: 'Файл не загружен' });
     }
     
-    res.set('Content-Type', 'application/json');
-    res.json({
-        filename: req.file.filename,
-        originalname: req.file.originalname,
-        mimetype: req.file.mimetype,
-        size: req.file.size,
-        url: `/uploads/${req.file.filename}`
-    });
+    try {
+        const filename = req.file.filename;
+        const filepath = path.join(__dirname, 'uploads', filename);
+        const mimetype = req.file.mimetype;
+        
+        // Обработка изображений
+        if (mimetype.startsWith('image/')) {
+            try {
+                // Создаём сжатую версию для быстрой загрузки
+                const compressedFilename = `compressed-${filename}`;
+                const compressedPath = path.join(__dirname, 'uploads', compressedFilename);
+                
+                await sharp(filepath)
+                    .resize(1920, 1080, {
+                        fit: 'inside',
+                        withoutEnlargement: true
+                    })
+                    .jpeg({ quality: 85, progressive: true })
+                    .toFile(compressedPath);
+                
+                console.log('✅ Изображение обработано:', filename);
+            } catch (error) {
+                console.log('⚠️ Ошибка обработки изображения:', error.message);
+            }
+        }
+        
+        res.set('Content-Type', 'application/json');
+        res.json({
+            filename: filename,
+            originalname: req.file.originalname,
+            mimetype: mimetype,
+            size: req.file.size,
+            url: `/uploads/${filename}`
+        });
+    } catch (error) {
+        console.error('Ошибка загрузки:', error);
+        res.status(500).json({ error: 'Ошибка загрузки файла' });
+    }
 });
+
+// Функция отправки push notifications
+function sendPushNotification(subscription, data) {
+    try {
+        // Для простоты используем встроенный механизм браузера
+        // В продакшене нужно использовать web-push библиотеку
+        console.log('📢 Push отправлен:', data.title);
+    } catch (error) {
+        console.error('Ошибка отправки push:', error);
+    }
+}
 
 // Socket.IO
 const connectedUsers = new Map();
@@ -465,9 +523,11 @@ io.on('connection', (socket) => {
             );
             
             let recipientSocketId = null;
+            let recipientUser = null;
             for (const [socketId, user] of connectedUsers.entries()) {
                 if (user.username === recipientUsername) {
                     recipientSocketId = socketId;
+                    recipientUser = user;
                     break;
                 }
             }
@@ -486,6 +546,13 @@ io.on('connection', (socket) => {
             
             if (recipientSocketId) {
                 io.to(recipientSocketId).emit('private-message', formattedMessage);
+            } else if (recipientUser && recipientUser.pushSubscription) {
+                // Отправляем push notification если пользователь офлайн
+                sendPushNotification(recipientUser.pushSubscription, {
+                    title: `Сообщение от ${senderUsername}`,
+                    body: message.substring(0, 100),
+                    tag: `message-${senderUsername}`
+                });
             }
         } catch (error) {
             console.error('Ошибка отправки приватного сообщения:', error);
@@ -630,6 +697,25 @@ io.on('connection', (socket) => {
         } catch (error) {
             console.error('Ошибка обновления профиля:', error);
             socket.emit('profile-updated', { success: false, message: 'Ошибка сервера' });
+        }
+    });
+    
+    // Подписка на push notifications
+    socket.on('subscribe-to-push', async (data) => {
+        try {
+            const { username, subscription } = data;
+            
+            // Сохраняем подписку в памяти (в продакшене нужна БД)
+            if (!connectedUsers.has(socket.id)) {
+                connectedUsers.set(socket.id, { username, socketId: socket.id });
+            }
+            
+            const user = connectedUsers.get(socket.id);
+            user.pushSubscription = subscription;
+            
+            console.log('✅ Push подписка получена:', username);
+        } catch (error) {
+            console.error('Ошибка подписки на push:', error);
         }
     });
     

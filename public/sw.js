@@ -1,4 +1,4 @@
-const CACHE_NAME = 'rodnya-v11.8';
+const CACHE_NAME = 'rodnya-v14.2';
 const urlsToCache = [
   '/',
   '/index.html',
@@ -56,4 +56,49 @@ self.addEventListener('fetch', (event) => {
         })
     );
   }
+});
+
+// Push notifications
+self.addEventListener('push', (event) => {
+  if (!event.data) return;
+  
+  try {
+    const data = event.data.json();
+    const options = {
+      body: data.body || 'Новое сообщение',
+      icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y="75" font-size="75">👥</text></svg>',
+      badge: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y="75" font-size="75">👥</text></svg>',
+      tag: data.tag || 'rodnya-notification',
+      requireInteraction: false,
+      data: {
+        url: data.url || '/'
+      }
+    };
+    
+    event.waitUntil(
+      self.registration.showNotification(data.title || 'Родня', options)
+    );
+  } catch (e) {
+    console.error('Ошибка push:', e);
+  }
+});
+
+// Клик на уведомление
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  
+  event.waitUntil(
+    clients.matchAll({ type: 'window' }).then((clientList) => {
+      // Если окно уже открыто, фокусируемся на нём
+      for (let i = 0; i < clientList.length; i++) {
+        if (clientList[i].url === '/' && 'focus' in clientList[i]) {
+          return clientList[i].focus();
+        }
+      }
+      // Если нет, открываем новое
+      if (clients.openWindow) {
+        return clients.openWindow(event.notification.data.url);
+      }
+    })
+  );
 });
