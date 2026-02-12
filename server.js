@@ -211,6 +211,13 @@ app.use((req, res, next) => {
     res.set('Pragma', 'no-cache');
     res.set('Expires', '0');
     res.set('ETag', 'W/"' + Date.now() + '"');
+    
+    // Для JS и CSS файлов добавляем дополнительные заголовки
+    if (req.url.endsWith('.js') || req.url.endsWith('.css')) {
+        res.set('Cache-Control', 'no-cache, no-store, must-revalidate, max-age=0, s-maxage=0');
+        res.set('Surrogate-Control', 'no-store');
+    }
+    
     next();
 });
 

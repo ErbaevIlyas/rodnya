@@ -124,9 +124,6 @@ const notificationPermissionBanner = document.getElementById('notification-permi
 const allowNotificationsBtn = document.getElementById('allow-notifications-btn');
 const dismissNotificationsBtn = document.getElementById('dismiss-notifications-btn');
 const callBtn = document.getElementById('call-btn');
-const callModal = document.getElementById('call-modal');
-const closeCallBtn = document.getElementById('close-call');
-const callContainer = document.getElementById('call-container');
 
 // Переменные
 let currentUsername = '';
@@ -139,21 +136,25 @@ let allUsers = [];
 let onlineUsers = [];
 let unreadMessages = {};
 
+// WebRTC переменные
+let localStream = null;
+let peerConnection = null;
+let remoteAudio = null;
+let callStartTime = null;
+let callDurationInterval = null;
+let isMuted = false;
+
 // Функция для звукового уведомления
 function playNotificationSound() {
     const audioContext = new (window.AudioContext || window.webkitAudioContext)();
     const oscillator = audioContext.createOscillator();
     const gainNode = audioContext.createGain();
-    
     oscillator.connect(gainNode);
     gainNode.connect(audioContext.destination);
-    
     oscillator.frequency.value = 800;
     oscillator.type = 'sine';
-    
     gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
     gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
-    
     oscillator.start(audioContext.currentTime);
     oscillator.stop(audioContext.currentTime + 0.5);
 }
@@ -175,13 +176,11 @@ let longPressTimer = null;
 
 function showContextMenu(messageId, x, y) {
     if (contextMenu) contextMenu.remove();
-    
     const menu = document.createElement('div');
     menu.className = 'context-menu';
     menu.style.left = x + 'px';
     menu.style.top = y + 'px';
     menu.innerHTML = `<button onclick="deleteMessage('${messageId}'); hideContextMenu()">🗑 Удалить</button>`;
-    
     document.body.appendChild(menu);
     contextMenu = menu;
 }
@@ -202,16 +201,11 @@ document.addEventListener('click', (e) => {
 // Инициализация
 document.addEventListener('DOMContentLoaded', () => {
     loadTheme();
-    
     const { username: savedUsername, password: savedPassword } = getCredentials();
-    
-    // Если есть сохранённые учётные данные, скрываем экран авторизации и сразу заходим
     if (savedUsername && savedPassword) {
         currentUsername = savedUsername;
-        // Скрываем экран авторизации сразу
         authModal.style.display = 'none';
         mainContainer.style.display = 'flex';
-        
         if (socket.connected) {
             socket.emit('login', { username: savedUsername, password: savedPassword });
         } else {
@@ -220,13 +214,10 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
     } else {
-        // Показываем экран авторизации только если нет сохранённых данных
         authModal.style.display = 'flex';
         mainContainer.style.display = 'none';
         loginUsernameInput.focus();
     }
-    
-    // Запрашиваем разрешение на push notifications
     if ('serviceWorker' in navigator && 'Notification' in window) {
         if (Notification.permission === 'default') {
             Notification.requestPermission().then((permission) => {
@@ -241,11 +232,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
-// Переключение между формами
 function toggleAuthForm() {
     loginForm.style.display = loginForm.style.display === 'none' ? 'block' : 'none';
     registerForm.style.display = registerForm.style.display === 'none' ? 'block' : 'none';
-    
     if (loginForm.style.display === 'block') {
         loginUsernameInput.focus();
     } else {
@@ -253,63 +242,40 @@ function toggleAuthForm() {
     }
 }
 
-// Регистрация
 registerBtn.addEventListener('click', () => {
     const username = registerUsernameInput.value.trim();
     const password = registerPasswordInput.value.trim();
     const passwordConfirm = registerPasswordConfirmInput.value.trim();
-    
     if (!username || !password) {
         alert('Заполните все поля');
         return;
     }
-    
     if (password !== passwordConfirm) {
         alert('Пароли не совпадают');
         return;
     }
-    
     if (password.length < 3) {
         alert('Пароль должен быть минимум 3 символа');
         return;
     }
-    
     socket.emit('register', { username, password });
 });
 
-// Вход
 loginBtn.addEventListener('click', () => {
     const username = loginUsernameInput.value.trim();
     const password = loginPasswordInput.value.trim();
-    
     if (!username || !password) {
         alert('Заполните все поля');
         return;
     }
-    
     socket.emit('login', { username, password });
 });
 
-// Обработчики Enter
-loginUsernameInput.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') loginPasswordInput.focus();
-});
-
-loginPasswordInput.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') loginBtn.click();
-});
-
-registerUsernameInput.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') registerPasswordInput.focus();
-});
-
-registerPasswordInput.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') registerPasswordConfirmInput.focus();
-});
-
-registerPasswordConfirmInput.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') registerBtn.click();
-});
+loginUsernameInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') loginPasswordInput.focus(); });
+loginPasswordInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') loginBtn.click(); });
+registerUsernameInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') registerPasswordInput.focus(); });
+registerPasswordInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') registerPasswordConfirmInput.focus(); });
+registerPasswordConfirmInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') registerBtn.click(); });
 
 // Socket события - Авторизация
 socket.on('register-response', (data) => {
@@ -326,32 +292,22 @@ socket.on('register-response', (data) => {
 
 socket.on('login-response', (data) => {
     if (data.success) {
-        // Если это ручной вход (есть значение в input)
         if (loginUsernameInput.value.trim()) {
             currentUsername = loginUsernameInput.value.trim();
             const password = loginPasswordInput.value.trim();
-            
-            // Сохраняем в localStorage и cookies
             saveCredentials(currentUsername, password);
         }
-        // Если это автозаход, credentials уже установлены
-        
         currentUserSpan.textContent = `👤 ${currentUsername}`;
         authModal.style.display = 'none';
         mainContainer.style.display = 'flex';
         messageInput.focus();
-        
         loginUsernameInput.value = '';
         loginPasswordInput.value = '';
-        
         socket.emit('load-general-chat', {});
-        
-        // Показываем баннер для запроса разрешения на уведомления если нужно
         if ('Notification' in window && Notification.permission === 'default') {
             notificationPermissionBanner.style.display = 'flex';
         }
     } else {
-        // Если ошибка при автозаходе, показываем экран авторизации
         authModal.style.display = 'flex';
         mainContainer.style.display = 'none';
         loginUsernameInput.value = '';
@@ -408,18 +364,13 @@ profileSaveBtn.addEventListener('click', () => {
 async function subscribeToPushNotifications() {
     try {
         console.log('🔄 Начинаем подписку на push...');
-        
         if (!('serviceWorker' in navigator)) {
             console.error('❌ Service Worker не поддерживается');
             return;
         }
-        
         const registration = await navigator.serviceWorker.ready;
         console.log('✅ Service Worker готов');
-        
-        // Проверяем есть ли уже подписка
         let subscription = await registration.pushManager.getSubscription();
-        
         if (subscription) {
             console.log('✅ Подписка уже существует, используем её');
         } else {
@@ -430,20 +381,12 @@ async function subscribeToPushNotifications() {
             });
             console.log('✅ Новая подписка создана');
         }
-        
-        // Отправляем подписку на сервер
         if (currentUsername && socket.connected) {
             console.log('📤 Отправляем подписку на сервер для:', currentUsername);
-            console.log('📊 Данные подписки:', {
-                endpoint: subscription.endpoint.substring(0, 50) + '...',
-                keys: subscription.getKey ? 'есть' : 'нет'
-            });
-            
             socket.emit('subscribe-to-push', {
                 username: currentUsername,
                 subscription: subscription.toJSON()
             });
-            
             console.log('✅ Подписка отправлена на сервер');
         } else {
             console.error('❌ Не удалось отправить подписку:', {
@@ -456,32 +399,20 @@ async function subscribeToPushNotifications() {
     }
 }
 
-// Конвертируем VAPID ключ в правильный формат
 function urlBase64ToUint8Array(base64String) {
     const padding = '='.repeat((4 - base64String.length % 4) % 4);
-    const base64 = (base64String + padding)
-        .replace(/\-/g, '+')
-        .replace(/_/g, '/');
-
+    const base64 = (base64String + padding).replace(/\-/g, '+').replace(/_/g, '/');
     const rawData = window.atob(base64);
     const outputArray = new Uint8Array(rawData.length);
-
     for (let i = 0; i < rawData.length; ++i) {
         outputArray[i] = rawData.charCodeAt(i);
     }
     return outputArray;
 }
 
-// Переключение темы
-lightThemeBtn.addEventListener('click', () => {
-    setTheme('light');
-});
+lightThemeBtn.addEventListener('click', () => { setTheme('light'); });
+darkThemeBtn.addEventListener('click', () => { setTheme('dark'); });
 
-darkThemeBtn.addEventListener('click', () => {
-    setTheme('dark');
-});
-
-// Обработчики баннера для разрешения уведомлений
 allowNotificationsBtn.addEventListener('click', () => {
     if ('Notification' in window) {
         Notification.requestPermission().then((permission) => {
@@ -514,27 +445,22 @@ function setTheme(theme) {
     localStorage.setItem('theme', theme);
 }
 
-// Загрузка сохранённой темы при загрузке страницы
 function loadTheme() {
     const savedTheme = localStorage.getItem('theme') || 'dark';
     setTheme(savedTheme);
 }
 
-// Загрузка данных профиля
 function loadProfileData() {
     socket.emit('get-profile', { username: currentUsername });
 }
 
-// Сохранение данных профиля
 function saveProfileData() {
     const newUsername = profileUsername.value.trim();
     const status = profileStatus.value.trim();
-    
     if (!newUsername) {
         alert('Имя не может быть пустым');
         return;
     }
-    
     socket.emit('update-profile', { 
         oldUsername: currentUsername,
         newUsername: newUsername,
@@ -542,19 +468,15 @@ function saveProfileData() {
     });
 }
 
-// Загрузка аватарки
 async function uploadAvatar(file) {
     const formData = new FormData();
     formData.append('file', file);
-    
     try {
         const response = await fetch('/upload', {
             method: 'POST',
             body: formData
         });
-        
         const result = await response.json();
-        
         if (response.ok) {
             socket.emit('update-avatar', {
                 username: currentUsername,
@@ -570,7 +492,6 @@ async function uploadAvatar(file) {
 // Выход
 logoutBtn.addEventListener('click', () => {
     clearCredentials();
-    
     currentUsername = '';
     currentChatUser = null;
     authModal.style.display = 'flex';
@@ -583,30 +504,23 @@ logoutBtn.addEventListener('click', () => {
     loginUsernameInput.focus();
 });
 
-// Кнопка "Назад в общий чат"
 backToGeneralBtn.addEventListener('click', () => {
     backToGeneralChat();
 });
 
-// Кнопка открытия/закрытия боковой панели на мобильных
 toggleSidebarBtn.addEventListener('click', () => {
     const sidebar = document.querySelector('.sidebar');
     sidebar.classList.toggle('active');
 });
 
-// Обновление списка пользователей
 function updateUsersList() {
     usersList.innerHTML = '';
-    
     allUsers.forEach(user => {
         const username = typeof user === 'string' ? user : user.username;
         if (username === currentUsername) return;
-        
         const userItem = document.createElement('div');
         userItem.className = 'user-item';
         if (username === currentChatUser) userItem.classList.add('active');
-        
-        // Аватарка
         const avatarUrl = typeof user === 'string' ? null : user.avatar_url;
         let avatarElement;
         if (avatarUrl) {
@@ -619,28 +533,22 @@ function updateUsersList() {
             avatarElement.className = 'user-list-avatar-placeholder';
             avatarElement.textContent = username.substring(0, 1).toUpperCase();
         }
-        
         const statusDot = document.createElement('div');
         statusDot.className = 'user-status';
-        
         const isOnline = typeof user === 'string' ? onlineUsers.includes(user) : user.isOnline;
         statusDot.style.background = isOnline ? '#4caf50' : '#ccc';
         statusDot.title = isOnline ? 'Онлайн' : 'Офлайн';
-        
         const userName = document.createElement('span');
         userName.textContent = username;
-        
         userItem.appendChild(avatarElement);
         userItem.appendChild(statusDot);
         userItem.appendChild(userName);
-        
         if (unreadMessages[username] && unreadMessages[username] > 0) {
             const badge = document.createElement('div');
             badge.className = 'unread-badge';
             badge.textContent = unreadMessages[username];
             userItem.appendChild(badge);
         }
-        
         userItem.addEventListener('click', () => {
             openPrivateChat(username);
             const sidebar = document.querySelector('.sidebar');
@@ -648,24 +556,18 @@ function updateUsersList() {
                 sidebar.classList.remove('active');
             }
         });
-        
         usersList.appendChild(userItem);
     });
 }
 
-// Открытие приватного чата
 function openPrivateChat(username) {
     currentChatUser = username;
     const backBtn = document.getElementById('back-to-general-btn');
     const chatTitle = document.getElementById('chat-title');
-    
     backBtn.style.display = 'flex';
     callBtn.style.display = 'flex';
-    
-    // Получаем информацию о пользователе
     const userInfo = allUsers.find(u => u.username === username);
     let statusText = 'Был в сети';
-    
     if (userInfo) {
         if (userInfo.isOnline) {
             statusText = 'Онлайн';
@@ -673,7 +575,6 @@ function openPrivateChat(username) {
             const lastOnlineDate = new Date(userInfo.lastOnline);
             const now = new Date();
             const diffMinutes = Math.floor((now - lastOnlineDate) / 60000);
-            
             if (diffMinutes < 1) {
                 statusText = 'Только что';
             } else if (diffMinutes < 60) {
@@ -687,24 +588,18 @@ function openPrivateChat(username) {
             }
         }
     }
-    
     chatTitle.innerHTML = `💬 ${username}<br><span style="font-size: 12px; color: #999;">${statusText}</span>`;
     messagesContainer.innerHTML = '';
-    
     unreadMessages[username] = 0;
     updateUsersList();
-    
     socket.emit('load-private-messages', { username: username });
-    
     messageInput.focus();
 }
 
-// Возврат в общий чат
 function backToGeneralChat() {
     currentChatUser = null;
     const backBtn = document.getElementById('back-to-general-btn');
     const chatTitle = document.getElementById('chat-title');
-    
     backBtn.style.display = 'none';
     callBtn.style.display = 'none';
     chatTitle.textContent = 'Общий чат';
@@ -714,25 +609,18 @@ function backToGeneralChat() {
             <h2>Добро пожаловать в Родню!</h2>
         </div>
     `;
-    
     document.querySelectorAll('.user-item').forEach(item => {
         item.classList.remove('private-chat');
     });
-    
     updateUsersList();
-    
     socket.emit('load-general-chat', {});
-    
-    // Убираем фокус с input и закрываем клавиатуру
     messageInput.blur();
     document.activeElement.blur();
 }
 
-// Отправка сообщения
 function sendMessage() {
     const message = messageInput.value.trim();
     if (!message) return;
-    
     if (currentChatUser) {
         socket.emit('send-private-message', {
             recipientUsername: currentChatUser,
@@ -743,14 +631,11 @@ function sendMessage() {
             message: message
         });
     }
-    
     messageInput.value = '';
     removeWelcomeMessage();
 }
 
-// Обработчики событий
 sendBtn.addEventListener('click', sendMessage);
-
 messageInput.addEventListener('keypress', (e) => {
     if (e.key === 'Enter') {
         sendMessage();
@@ -776,7 +661,6 @@ fileBtn.addEventListener('click', (e) => {
     attachMenu.classList.remove('active');
 });
 
-// Меню прикрепления
 attachBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     attachMenu.classList.toggle('active');
@@ -788,7 +672,6 @@ document.addEventListener('click', (e) => {
     }
 });
 
-// Обработчики input файлов
 photoInput.addEventListener('change', (e) => {
     if (e.target.files.length > 0) {
         handleFiles(e.target.files);
@@ -817,7 +700,6 @@ fileInput.addEventListener('change', (e) => {
     }
 });
 
-// Drag & Drop
 fileUploadArea.addEventListener('dragover', (e) => {
     e.preventDefault();
     fileUploadArea.style.background = '#e3f2fd';
@@ -830,12 +712,10 @@ fileUploadArea.addEventListener('dragleave', () => {
 fileUploadArea.addEventListener('drop', (e) => {
     e.preventDefault();
     fileUploadArea.style.background = '#f8f9fa';
-    
     const files = e.dataTransfer.files;
     handleFiles(files);
 });
 
-// Обработка файлов
 function handleFiles(files) {
     Array.from(files).forEach(file => {
         if (file.type.startsWith('image/')) {
@@ -843,40 +723,32 @@ function handleFiles(files) {
         } else if (file.type.startsWith('video/')) {
             showVideoPreview(file);
         } else {
-            // Документы загружаются сразу без предпросмотра
             uploadFile(file);
         }
     });
     fileUploadArea.classList.remove('active');
 }
 
-// Предпросмотр изображения
 function showImagePreview(file) {
     const reader = new FileReader();
-    
     reader.onload = (e) => {
         currentPreviewFile = file;
         previewImage.src = e.target.result;
         imageCaptionInput.value = '';
         imagePreviewModal.classList.add('active');
     };
-    
     reader.readAsDataURL(file);
 }
 
-// Предпросмотр видео
 function showVideoPreview(file) {
     const reader = new FileReader();
-    
     reader.onload = (e) => {
         currentPreviewFile = file;
         previewImage.src = e.target.result;
         previewImage.style.display = 'none';
-        
         const previewContainer = document.querySelector('.preview-image-container');
         const existingVideo = previewContainer.querySelector('video');
         if (existingVideo) existingVideo.remove();
-        
         const videoElement = document.createElement('video');
         videoElement.src = e.target.result;
         videoElement.style.maxWidth = '100%';
@@ -884,20 +756,19 @@ function showVideoPreview(file) {
         videoElement.style.borderRadius = '6px';
         videoElement.style.objectFit = 'contain';
         videoElement.controls = true;
-        
         previewContainer.appendChild(videoElement);
-        
         imageCaptionInput.value = '';
         imagePreviewModal.classList.add('active');
     };
-    
     reader.readAsDataURL(file);
 }
 
-// Закрытие предпросмотра
-closePreviewBtn.addEventListener('click', () => {
-    imagePreviewModal.classList.remove('active');
-    currentPreviewFile = null;
+sendPreviewBtn.addEventListener('click', () => {
+    if (currentPreviewFile) {
+        uploadFile(currentPreviewFile, imageCaptionInput.value);
+        imagePreviewModal.classList.remove('active');
+        currentPreviewFile = null;
+    }
 });
 
 cancelPreviewBtn.addEventListener('click', () => {
@@ -905,1360 +776,203 @@ cancelPreviewBtn.addEventListener('click', () => {
     currentPreviewFile = null;
 });
 
-// Закрытие просмотра картинки из сообщений
-closeViewerBtn.addEventListener('click', () => {
-    imageViewerModal.classList.remove('active');
+closePreviewBtn.addEventListener('click', () => {
+    imagePreviewModal.classList.remove('active');
+    currentPreviewFile = null;
 });
 
-// Закрытие при клике на фон
-imageViewerModal.addEventListener('click', (e) => {
-    if (e.target === imageViewerModal) {
-        imageViewerModal.classList.remove('active');
-    }
-});
-
-// Видео модал
-const videoViewerModal = document.getElementById('video-viewer-modal');
-const viewerVideo = document.getElementById('viewer-video');
-const closeVideoViewerBtn = document.getElementById('close-video-viewer');
-const videoPlayBtn = document.getElementById('video-play-btn');
-
-closeVideoViewerBtn.addEventListener('click', () => {
-    videoViewerModal.classList.remove('active');
-    viewerVideo.pause();
-});
-
-videoViewerModal.addEventListener('click', (e) => {
-    if (e.target === videoViewerModal) {
-        videoViewerModal.classList.remove('active');
-        viewerVideo.pause();
-    }
-});
-
-viewerVideo.addEventListener('play', () => {
-    videoPlayBtn.innerHTML = '<i class="fas fa-pause"></i>';
-});
-
-viewerVideo.addEventListener('pause', () => {
-    videoPlayBtn.innerHTML = '<i class="fas fa-play"></i>';
-});
-
-videoPlayBtn.addEventListener('click', () => {
-    if (viewerVideo.paused) {
-        viewerVideo.play();
-    } else {
-        viewerVideo.pause();
-    }
-});
-
-// Полноэкранный просмотр картинок
-const fullscreenImageModal = document.getElementById('fullscreen-image-modal');
-const fullscreenImage = document.getElementById('fullscreen-image');
-const fullscreenImageContainer = document.getElementById('fullscreen-image-container');
-const closeFullscreenBtn = document.getElementById('close-fullscreen');
-const fullscreenViewerBtn = document.getElementById('fullscreen-viewer-btn');
-const zoomInBtn = document.getElementById('zoom-in-btn');
-const zoomOutBtn = document.getElementById('zoom-out-btn');
-const zoomLevel = document.getElementById('zoom-level');
-
-let currentZoom = 1;
-const minZoom = 0.5;
-const maxZoom = 4;
-const zoomStep = 0.2;
-
-fullscreenViewerBtn.addEventListener('click', () => {
-    const currentImageSrc = viewerImage.src;
-    fullscreenImage.src = currentImageSrc;
-    currentZoom = 1;
-    updateZoomLevel();
-    imageViewerModal.classList.remove('active');
-    fullscreenImageModal.classList.add('active');
-});
-
-closeFullscreenBtn.addEventListener('click', () => {
-    fullscreenImageModal.classList.remove('active');
-    imageViewerModal.classList.add('active');
-});
-
-fullscreenImageModal.addEventListener('click', (e) => {
-    if (e.target === fullscreenImageModal) {
-        fullscreenImageModal.classList.remove('active');
-        imageViewerModal.classList.add('active');
-    }
-});
-
-// Зум функции
-function updateZoomLevel() {
-    currentZoom = Math.max(minZoom, Math.min(maxZoom, currentZoom));
-    fullscreenImage.style.transform = `scale(${currentZoom})`;
-    zoomLevel.textContent = Math.round(currentZoom * 100) + '%';
-}
-
-zoomInBtn.addEventListener('click', () => {
-    currentZoom += zoomStep;
-    updateZoomLevel();
-});
-
-zoomOutBtn.addEventListener('click', () => {
-    currentZoom -= zoomStep;
-    updateZoomLevel();
-});
-
-// Зум колесом мыши
-fullscreenImageContainer.addEventListener('wheel', (e) => {
-    e.preventDefault();
-    if (e.deltaY < 0) {
-        currentZoom += zoomStep;
-    } else {
-        currentZoom -= zoomStep;
-    }
-    updateZoomLevel();
-}, { passive: false });
-
-// Двойной клик для сброса зума
-fullscreenImage.addEventListener('dblclick', () => {
-    currentZoom = 1;
-    updateZoomLevel();
-});
-
-// Отправка изображения с подписью
-sendPreviewBtn.addEventListener('click', () => {
-    if (currentPreviewFile) {
-        uploadFile(currentPreviewFile, imageCaptionInput.value.trim());
-        imagePreviewModal.classList.remove('active');
-        currentPreviewFile = null;
-    }
-});
-
-// Загрузка файла
 async function uploadFile(file, caption = '') {
     const formData = new FormData();
     formData.append('file', file);
-    
-    // Показываем статус загрузки
-    const uploadStatusDiv = document.createElement('div');
-    uploadStatusDiv.className = 'upload-status';
-    uploadStatusDiv.id = `upload-${Date.now()}`;
-    uploadStatusDiv.innerHTML = `
-        <div class="upload-progress-container">
-            <div class="upload-info">
-                <span class="upload-filename">${file.name}</span>
-                <span class="upload-percent">0%</span>
-            </div>
-            <div class="upload-progress-bar">
-                <div class="upload-progress-fill" style="width: 0%"></div>
-            </div>
-        </div>
-    `;
-    messagesContainer.appendChild(uploadStatusDiv);
-    messagesContainer.scrollTop = messagesContainer.scrollHeight;
-    
     try {
-        const xhr = new XMLHttpRequest();
-        
-        // Отслеживаем прогресс загрузки
-        xhr.upload.addEventListener('progress', (e) => {
-            if (e.lengthComputable) {
-                const percentComplete = (e.loaded / e.total) * 100;
-                const progressFill = uploadStatusDiv.querySelector('.upload-progress-fill');
-                const percentSpan = uploadStatusDiv.querySelector('.upload-percent');
-                if (progressFill && percentSpan) {
-                    progressFill.style.width = percentComplete + '%';
-                    percentSpan.textContent = Math.round(percentComplete) + '%';
-                }
-            }
+        const response = await fetch('/upload', {
+            method: 'POST',
+            body: formData
         });
-        
-        xhr.addEventListener('load', () => {
-            if (xhr.status === 200) {
-                try {
-                    const result = JSON.parse(xhr.responseText);
-                    
-                    // Удаляем статус загрузки с небольшой задержкой
-                    setTimeout(() => {
-                        if (uploadStatusDiv.parentNode) {
-                            uploadStatusDiv.remove();
-                        }
-                    }, 300);
-                    
-                    if (currentChatUser) {
-                        socket.emit('send-private-file', {
-                            recipientUsername: currentChatUser,
-                            filename: result.filename,
-                            originalname: result.originalname,
-                            url: result.url,
-                            mimetype: result.mimetype,
-                            caption: caption
-                        });
-                    } else {
-                        socket.emit('send-file', {
-                            filename: result.filename,
-                            originalname: result.originalname,
-                            url: result.url,
-                            mimetype: result.mimetype,
-                            caption: caption
-                        });
-                    }
-                    
-                    removeWelcomeMessage();
-                } catch (e) {
-                    console.error('Ошибка парсинга ответа:', e);
-                    if (uploadStatusDiv.parentNode) {
-                        uploadStatusDiv.remove();
-                    }
-                    alert('Ошибка загрузки файла');
-                }
+        const result = await response.json();
+        if (response.ok) {
+            if (currentChatUser) {
+                socket.emit('send-private-file', {
+                    recipientUsername: currentChatUser,
+                    filename: result.filename,
+                    originalname: result.originalname,
+                    url: result.url,
+                    mimetype: result.mimetype,
+                    caption: caption
+                });
             } else {
-                if (uploadStatusDiv.parentNode) {
-                    uploadStatusDiv.remove();
-                }
-                alert('Ошибка загрузки файла: ' + xhr.status);
+                socket.emit('send-file', {
+                    filename: result.filename,
+                    originalname: result.originalname,
+                    url: result.url,
+                    mimetype: result.mimetype,
+                    caption: caption
+                });
             }
-        });
-        
-        xhr.addEventListener('error', () => {
-            if (uploadStatusDiv.parentNode) {
-                uploadStatusDiv.remove();
-            }
-            alert('Ошибка загрузки файла');
-        });
-        
-        xhr.addEventListener('abort', () => {
-            if (uploadStatusDiv.parentNode) {
-                uploadStatusDiv.remove();
-            }
-        });
-        
-        xhr.open('POST', '/upload');
-        xhr.send(formData);
-    } catch (error) {
-        if (uploadStatusDiv.parentNode) {
-            uploadStatusDiv.remove();
         }
-        console.error('Ошибка:', error);
+    } catch (error) {
         alert('Ошибка загрузки файла: ' + error.message);
     }
 }
 
-// Эмодзи
-emojiBtn.addEventListener('click', () => {
-    emojiPicker.classList.toggle('active');
-});
-
-document.addEventListener('click', (e) => {
-    if (!emojiBtn.contains(e.target) && !emojiPicker.contains(e.target)) {
-        emojiPicker.classList.remove('active');
-    }
-});
-
-document.querySelectorAll('.emoji').forEach(emoji => {
-    emoji.addEventListener('click', () => {
-        messageInput.value += emoji.textContent;
-        messageInput.focus();
-        emojiPicker.classList.remove('active');
+// Обработчики сообщений
+socket.on('load-general-messages', (messages) => {
+    messagesContainer.innerHTML = '';
+    messages.forEach(msg => {
+        displayMessage(msg, 'general');
     });
 });
 
-// Голосовые сообщения
-let currentVoiceBlob = null;
+socket.on('new-message', (message) => {
+    displayMessage(message, 'general');
+    removeWelcomeMessage();
+});
 
-voiceBtn.addEventListener('click', toggleRecording);
+socket.on('private-messages-loaded', (messages) => {
+    messagesContainer.innerHTML = '';
+    messages.forEach(msg => {
+        displayMessage(msg, 'private');
+    });
+});
 
-async function toggleRecording() {
-    if (!isRecording) {
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({ 
-                audio: {
-                    echoCancellation: true,
-                    noiseSuppression: true,
-                    autoGainControl: true
-                }
-            });
-            mediaRecorder = new MediaRecorder(stream, {
-                mimeType: 'audio/webm'
-            });
-            recordedChunks = [];
-            
-            mediaRecorder.ondataavailable = (e) => {
-                if (e.data.size > 0) {
-                    recordedChunks.push(e.data);
-                }
-            };
-            
-            mediaRecorder.onstop = () => {
-                const blob = new Blob(recordedChunks, { type: 'audio/webm' });
-                currentVoiceBlob = blob;
-                showVoicePreview(blob);
-                stream.getTracks().forEach(track => track.stop());
-            };
-            
-            mediaRecorder.start();
-            isRecording = true;
-            voiceBtn.classList.add('active');
-            voiceBtn.innerHTML = '<i class="fas fa-stop"></i>';
-            
-        } catch (error) {
-            console.error('Ошибка микрофона:', error);
-            alert('Ошибка доступа к микрофону: ' + error.message);
-        }
+socket.on('private-message', (message) => {
+    if (currentChatUser === message.from || currentChatUser === message.to) {
+        displayMessage(message, 'private');
+        removeWelcomeMessage();
     } else {
-        mediaRecorder.stop();
-        isRecording = false;
-        voiceBtn.classList.remove('active');
-        voiceBtn.innerHTML = '<i class="fas fa-microphone"></i>';
-    }
-}
-
-// Превью голосового сообщения
-function showVoicePreview(blob) {
-    const url = URL.createObjectURL(blob);
-    
-    const modal = document.createElement('div');
-    modal.style.cssText = `
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background: rgba(0,0,0,0.7);
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        z-index: 2000;
-        padding: 20px;
-    `;
-    
-    const content = document.createElement('div');
-    content.style.cssText = `
-        background: white;
-        padding: 20px;
-        border-radius: 12px;
-        text-align: center;
-        max-width: 280px;
-        width: 100%;
-    `;
-    
-    content.innerHTML = `
-        <h3 style="margin-bottom: 15px; font-size: 16px; color: #333;">🎤 Голосовое сообщение</h3>
-        <audio controls style="width: 100%; margin-bottom: 15px; height: 32px;">
-            <source src="${url}" type="audio/webm">
-        </audio>
-        <div style="display: flex; gap: 10px;">
-            <button id="cancel-voice" style="flex: 1; padding: 10px; background: #f0f0f0; color: #333; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600;">Отмена</button>
-            <button id="send-voice" style="flex: 1; padding: 10px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600;">Отправить</button>
-        </div>
-    `;
-    
-    modal.appendChild(content);
-    document.body.appendChild(modal);
-    
-    document.getElementById('cancel-voice').onclick = () => {
-        modal.remove();
-        currentVoiceBlob = null;
-    };
-    
-    document.getElementById('send-voice').onclick = () => {
-        const file = new File([blob], `voice-${Date.now()}.webm`, { type: 'audio/webm' });
-        uploadFile(file);
-        modal.remove();
-        currentVoiceBlob = null;
-    };
-}
-
-// Socket события - Сообщения
-socket.on('new-message', (data) => {
-    if (!currentChatUser) {
-        displayMessage(data);
-    }
-});
-
-socket.on('load-general-messages', (loadedMessages) => {
-    messagesContainer.innerHTML = '';
-    loadedMessages.forEach(msg => displayMessage(msg));
-    
-    // Отправляем событие что сообщения прочитаны
-    loadedMessages.forEach(msg => {
-        if (msg.username !== currentUsername && msg.readStatus < 2) {
-            socket.emit('mark-as-read', { id: msg.id });
+        if (!unreadMessages[message.from]) {
+            unreadMessages[message.from] = 0;
         }
-    });
-});
-
-socket.on('private-messages-loaded', (loadedMessages) => {
-    messagesContainer.innerHTML = '';
-    loadedMessages.forEach(msg => displayMessage(msg));
-    
-    // Отправляем событие что сообщения прочитаны
-    loadedMessages.forEach(msg => {
-        if (msg.from !== currentUsername && msg.readStatus < 2) {
-            socket.emit('mark-as-read', { id: msg.id });
-        }
-    });
-});
-
-socket.on('private-message', (data) => {
-    if (data.from === currentChatUser || data.to === currentChatUser) {
-        displayMessage(data);
-    } else if (data.from !== currentUsername) {
-        if (!unreadMessages[data.from]) {
-            unreadMessages[data.from] = 0;
-        }
-        unreadMessages[data.from]++;
+        unreadMessages[message.from]++;
         updateUsersList();
-        
-        try {
-            playNotificationSound();
-        } catch (e) {
-            console.log('Ошибка звука:', e);
-        }
-        
-        if ('Notification' in window && Notification.permission === 'granted') {
-            new Notification(`Сообщение от ${data.from}`, {
-                body: data.message || 'Отправил файл',
-                icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y="75" font-size="75">👥</text></svg>'
-            });
-        }
+        playNotificationSound();
     }
 });
 
 socket.on('message-deleted', (data) => {
-    const messageDiv = document.getElementById(`msg-${data.id}`);
-    if (messageDiv) {
-        messageDiv.remove();
+    const messageEl = document.getElementById(`msg-${data.id}`);
+    if (messageEl) {
+        messageEl.remove();
     }
 });
 
 socket.on('message-read', (data) => {
-    const messageDiv = document.getElementById(`msg-${data.id}`);
-    if (messageDiv) {
-        const statusSpan = messageDiv.querySelector('.read-status');
-        if (statusSpan) {
-            statusSpan.textContent = '✓✓';
+    const messageEl = document.getElementById(`msg-${data.id}`);
+    if (messageEl) {
+        const readStatus = messageEl.querySelector('.read-status');
+        if (readStatus) {
+            readStatus.textContent = '✓✓';
         }
     }
-});
-
-socket.on('profile-data', (data) => {
-    if (data.avatar_url) {
-        profileAvatar.src = data.avatar_url;
-    } else {
-        profileAvatar.src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="50" fill="%23667eea"/><circle cx="50" cy="35" r="15" fill="white"/><path d="M 20 70 Q 20 55 50 55 Q 80 55 80 70" fill="white"/></svg>';
-    }
-    profileStatus.value = data.status_text || '';
 });
 
 socket.on('profile-updated', (data) => {
     if (data.success) {
-        if (data.newUsername && data.newUsername !== currentUsername) {
-            currentUsername = data.newUsername;
-            currentUserSpan.textContent = `👤 ${currentUsername}`;
-            saveCredentials(currentUsername, getCookie('password'));
-        }
-        alert('Профиль обновлен!');
-        profileModal.classList.remove('active');
+        currentUsername = data.newUsername;
+        currentUserSpan.textContent = `👤 ${currentUsername}`;
+        saveCredentials(currentUsername, getCookie('password'));
+        alert('Профиль обновлен');
     } else {
-        alert('Ошибка: ' + (data.message || 'Не удалось обновить профиль'));
+        alert('Ошибка: ' + data.message);
     }
 });
 
-// Отображение сообщения
-function displayMessage(data) {
-    const messageDiv = document.createElement('div');
-    messageDiv.className = 'message';
-    messageDiv.id = `msg-${data.id}`;
-    
-    const isOwn = data.username === currentUsername || data.from === currentUsername;
-    messageDiv.classList.add(isOwn ? 'own' : 'other');
-    
-    const senderName = data.username || data.from;
-    const formattedTime = formatTime(data.timestamp);
-    
-    // Получаем аватарку - сначала из сообщения, потом из allUsers
-    let avatarUrl = data.avatar_url;
-    if (!avatarUrl) {
-        const userInfo = allUsers.find(u => u.username === senderName);
-        avatarUrl = userInfo && userInfo.avatar_url ? userInfo.avatar_url : null;
+socket.on('profile-data', (data) => {
+    profileAvatar.src = data.avatar_url || 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="50" fill="%23ccc"/></svg>';
+    profileStatus.value = data.status_text || '';
+});
+
+function displayMessage(msg, type) {
+    const messageEl = document.createElement('div');
+    messageEl.id = `msg-${msg.id}`;
+    messageEl.className = 'message';
+    if (msg.username === currentUsername || msg.from === currentUsername) {
+        messageEl.classList.add('own-message');
     }
-    
-    // Галочки для статуса прочитанности
-    let checkmarks = '';
-    if (isOwn) {
-        if (data.readStatus === 2) {
-            checkmarks = '<span class="read-status">✓✓</span>';
-        } else if (data.readStatus === 1) {
-            checkmarks = '<span class="read-status">✓</span>';
+    let content = '';
+    if (msg.type === 'file') {
+        const ext = msg.originalname.split('.').pop().toLowerCase();
+        const isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext);
+        const isVideo = ['mp4', 'webm', 'mov', 'avi'].includes(ext);
+        const isAudio = ['mp3', 'wav', 'ogg'].includes(ext);
+        if (isImage) {
+            content = `<img src="${msg.url}" alt="Image" style="max-height: 200px; cursor: pointer;" onclick="openImageViewer('${msg.url}')">`;
+            if (msg.caption) content += `<p>${msg.caption}</p>`;
+        } else if (isVideo) {
+            content = `<video style="max-height: 200px; cursor: pointer;" onclick="openVideoViewer('${msg.url}')"><source src="${msg.url}"></video>`;
+            if (msg.caption) content += `<p>${msg.caption}</p>`;
+        } else if (isAudio) {
+            content = `<audio controls style="width: 100%;"><source src="${msg.url}"></audio>`;
+            if (msg.caption) content += `<p>${msg.caption}</p>`;
         } else {
-            checkmarks = '<span class="read-status">✓</span>';
+            content = `<a href="${msg.url}" download="${msg.originalname}">📎 ${msg.originalname}</a>`;
+            if (msg.caption) content += `<p>${msg.caption}</p>`;
         }
-    }
-    
-    // HTML для аватарки
-    let avatarHtml = '';
-    if (avatarUrl) {
-        avatarHtml = `<img src="${avatarUrl}" alt="${senderName}" class="message-avatar">`;
     } else {
-        const initials = senderName.substring(0, 1).toUpperCase();
-        avatarHtml = `<div class="message-avatar-placeholder">${initials}</div>`;
+        content = `<p>${msg.message}</p>`;
     }
-    
-    if (data.type === 'file') {
-        let captionHtml = '';
-        if (data.caption) {
-            captionHtml = `<div class="message-caption">"${data.caption}"</div>`;
+    messageEl.innerHTML = `
+        <div class="message-content">
+            ${content}
+            <span class="message-time">${formatTime(msg.timestamp)}</span>
+            ${msg.username === currentUsername || msg.from === currentUsername ? `<span class="read-status">${msg.readStatus === 2 ? '✓✓' : '✓'}</span>` : ''}
+        </div>
+    `;
+    messageEl.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        if (msg.username === currentUsername || msg.from === currentUsername) {
+            showContextMenu(msg.id, e.clientX, e.clientY);
         }
-        
-        messageDiv.innerHTML = `
-            ${!isOwn ? avatarHtml : ''}
-            <div class="message-content">
-                <div class="message-header">
-                    <span class="username">${senderName}</span>
-                    <span class="timestamp">${formattedTime}</span>
-                    ${checkmarks}
-                </div>
-                ${getMediaPreview(data.url, data.mimetype, data.originalname)}
-                ${captionHtml}
-            </div>
-            ${isOwn ? avatarHtml : ''}
-        `;
-    } else {
-        messageDiv.innerHTML = `
-            ${!isOwn ? avatarHtml : ''}
-            <div class="message-content">
-                <div class="message-header">
-                    <span class="username">${senderName}</span>
-                    <span class="timestamp">${formattedTime}</span>
-                    ${checkmarks}
-                </div>
-                <div class="message-bubble">${data.message}</div>
-            </div>
-            ${isOwn ? avatarHtml : ''}
-        `;
-    }
-    
-    messagesContainer.appendChild(messageDiv);
-    
-    // Добавляем контекстное меню
-    if (isOwn) {
-        // Правая кнопка мыши (ПК)
-        messageDiv.addEventListener('contextmenu', (e) => {
-            e.preventDefault();
-            showContextMenu(data.id, e.clientX, e.clientY);
-        });
-        
-        // Клик на мобильных (для удаления)
-        if (window.innerWidth <= 899) {
-            messageDiv.addEventListener('click', (e) => {
-                // Не показываем меню если кликнули на ссылку или медиа
-                if (e.target.tagName === 'A' || e.target.tagName === 'IMG' || e.target.tagName === 'VIDEO' || e.target.tagName === 'AUDIO') {
-                    return;
-                }
-                showContextMenu(data.id, e.clientX, e.clientY);
-            });
-        }
-        
-        // Долгое нажатие (телефон) - для копирования текста
-        messageDiv.addEventListener('touchstart', (e) => {
+    });
+    messageEl.addEventListener('touchstart', (e) => {
+        if (msg.username === currentUsername || msg.from === currentUsername) {
             longPressTimer = setTimeout(() => {
                 const touch = e.touches[0];
-                showContextMenu(data.id, touch.clientX, touch.clientY);
+                showContextMenu(msg.id, touch.clientX, touch.clientY);
             }, 500);
-        });
-        
-        messageDiv.addEventListener('touchend', () => {
-            clearTimeout(longPressTimer);
-        });
-        
-        messageDiv.addEventListener('touchmove', () => {
-            clearTimeout(longPressTimer);
-        });
-    }
-    
+        }
+    });
+    messageEl.addEventListener('touchend', () => {
+        clearTimeout(longPressTimer);
+    });
+    messagesContainer.appendChild(messageEl);
     messagesContainer.scrollTop = messagesContainer.scrollHeight;
-}
-
-// Удаление сообщения
-function deleteMessage(messageId) {
-    if (confirm('Удалить сообщение?')) {
-        socket.emit('delete-message', { id: messageId });
-        const messageDiv = document.getElementById(`msg-${messageId}`);
-        if (messageDiv) {
-            messageDiv.remove();
-        }
+    if (msg.from && msg.from !== currentUsername && type === 'private') {
+        socket.emit('mark-as-read', { id: msg.id });
     }
 }
 
-// Удаление приветственного сообщения
 function removeWelcomeMessage() {
-    const welcomeMessage = document.querySelector('.welcome-message');
-    if (welcomeMessage) {
-        welcomeMessage.remove();
+    const welcome = messagesContainer.querySelector('.welcome-message');
+    if (welcome) {
+        welcome.remove();
     }
 }
 
-// Предварительный просмотр медиа
-function getMediaPreview(url, mimetype, filename) {
-    if (mimetype.startsWith('image/')) {
-        // Для GIF используем оригинал, для остальных - сжатую версию
-        let displayUrl = url;
-        if (mimetype !== 'image/gif' && !url.includes('compressed-')) {
-            displayUrl = url.replace('/uploads/', '/uploads/compressed-');
-        }
-        
-        return `
-            <div class="message-image-container" onclick="openImageViewer('${url}')">
-                <img src="${displayUrl}" alt="${filename}" class="message-image">
-                <a href="${url}?download=true" download="${filename}" class="image-download-btn" title="Скачать" onclick="event.stopPropagation()">
-                    <i class="fas fa-download"></i>
-                </a>
-            </div>
-        `;
-    }
-    
-    if (mimetype.startsWith('video/')) {
-        return `
-            <div class="message-video-container" onclick="openVideoViewer('${url}')">
-                <video src="${url}" class="message-video"></video>
-                <div class="video-play-overlay">
-                    <i class="fas fa-play"></i>
-                </div>
-                <a href="${url}?download=true" download="${filename}" class="video-download-btn" title="Скачать видео" onclick="event.stopPropagation()">
-                    <i class="fas fa-download"></i>
-                </a>
-            </div>
-        `;
-    }
-    
-    if (mimetype.startsWith('audio/')) {
-        return `
-            <div class="message-audio-container">
-                <audio src="${url}" controls class="message-audio"></audio>
-                <a href="${url}?download=true" download="${filename}" class="audio-download-btn" title="Скачать аудио">
-                    <i class="fas fa-download"></i>
-                </a>
-            </div>
-        `;
-    }
-    
-    // Для документов показываем иконку и ссылку
-    const getFileIcon = (name) => {
-        if (name.endsWith('.pdf')) return '📄';
-        if (name.endsWith('.doc') || name.endsWith('.docx')) return '📝';
-        if (name.endsWith('.xls') || name.endsWith('.xlsx')) return '📊';
-        if (name.endsWith('.ppt') || name.endsWith('.pptx')) return '🎯';
-        if (name.endsWith('.zip') || name.endsWith('.rar')) return '📦';
-        return '📎';
-    };
-    
-    const icon = getFileIcon(filename);
-    return `<a href="${url}?download=true" download="${filename}" class="file-link" style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: #f0f0f0; border-radius: 6px; text-decoration: none; color: #333; width: fit-content;">
-        <span style="font-size: 20px;">${icon}</span>
-        <span style="font-size: 13px; word-break: break-all;">${filename}</span>
-    </a>`;
+function deleteMessage(id) {
+    socket.emit('delete-message', { id: id });
 }
 
-// Открытие картинки в модале
 function openImageViewer(url) {
-    // Если это сжатая версия, используем оригинал для просмотра
-    const originalUrl = url.includes('compressed-') ? url.replace('compressed-', '') : url;
-    viewerImage.src = originalUrl;
+    viewerImage.src = url;
     imageViewerModal.classList.add('active');
 }
 
-// Открытие видео в модале
 function openVideoViewer(url) {
-    const videoViewerModal = document.getElementById('video-viewer-modal');
-    const viewerVideo = document.getElementById('viewer-video');
-    viewerVideo.src = url;
+    const video = document.getElementById('viewer-video');
+    video.src = url;
     videoViewerModal.classList.add('active');
-    viewerVideo.play();
 }
 
-// ===== AVATAR EDITOR =====
-let avatarEditorState = {
-    image: null,
-    zoom: 1,
-    offsetX: 0,
-    offsetY: 0,
-    isDragging: false,
-    dragStartX: 0,
-    dragStartY: 0
-};
-
-const avatarEditorModal = document.getElementById('avatar-editor-modal');
-const closeEditorBtn = document.getElementById('close-editor');
-const cancelEditorBtn = document.getElementById('cancel-editor');
-const saveEditorBtn = document.getElementById('save-editor');
-const zoomSlider = document.getElementById('zoom-slider');
-const zoomValue = document.getElementById('zoom-value');
-const avatarCanvas = document.getElementById('avatar-canvas');
-const canvasCtx = avatarCanvas.getContext('2d');
-
-// Открытие редактора аватарки
-changeAvatarBtn.addEventListener('click', () => {
-    avatarInput.click();
+closeViewerBtn.addEventListener('click', () => {
+    imageViewerModal.classList.remove('active');
 });
 
-avatarInput.addEventListener('change', (e) => {
-    if (e.target.files.length > 0) {
-        const file = e.target.files[0];
-        const reader = new FileReader();
-        
-        reader.onload = (event) => {
-            const img = new Image();
-            img.onload = () => {
-                avatarEditorState.image = img;
-                avatarEditorState.zoom = 1;
-                avatarEditorState.offsetX = 0;
-                avatarEditorState.offsetY = 0;
-                
-                zoomSlider.value = 1;
-                zoomValue.textContent = '100%';
-                
-                avatarEditorModal.classList.add('active');
-                drawAvatarPreview();
-            };
-            img.src = event.target.result;
-        };
-        
-        reader.readAsDataURL(file);
-        avatarInput.value = '';
-    }
+document.getElementById('close-video-viewer').addEventListener('click', () => {
+    document.getElementById('video-viewer-modal').classList.remove('active');
 });
-
-// Закрытие редактора
-closeEditorBtn.addEventListener('click', () => {
-    avatarEditorModal.classList.remove('active');
-    avatarEditorState.image = null;
-});
-
-cancelEditorBtn.addEventListener('click', () => {
-    avatarEditorModal.classList.remove('active');
-    avatarEditorState.image = null;
-});
-
-// Зум слайдер
-zoomSlider.addEventListener('input', (e) => {
-    avatarEditorState.zoom = parseFloat(e.target.value);
-    zoomValue.textContent = Math.round(avatarEditorState.zoom * 100) + '%';
-    drawAvatarPreview();
-});
-
-// Канвас события
-avatarCanvas.addEventListener('mousedown', (e) => {
-    avatarEditorState.isDragging = true;
-    avatarEditorState.dragStartX = e.clientX;
-    avatarEditorState.dragStartY = e.clientY;
-});
-
-avatarCanvas.addEventListener('mousemove', (e) => {
-    if (avatarEditorState.isDragging) {
-        const deltaX = e.clientX - avatarEditorState.dragStartX;
-        const deltaY = e.clientY - avatarEditorState.dragStartY;
-        
-        avatarEditorState.offsetX += deltaX;
-        avatarEditorState.offsetY += deltaY;
-        
-        avatarEditorState.dragStartX = e.clientX;
-        avatarEditorState.dragStartY = e.clientY;
-        
-        drawAvatarPreview();
-    }
-});
-
-avatarCanvas.addEventListener('mouseup', () => {
-    avatarEditorState.isDragging = false;
-});
-
-avatarCanvas.addEventListener('mouseleave', () => {
-    avatarEditorState.isDragging = false;
-});
-
-// Сенсорные события для мобильных
-avatarCanvas.addEventListener('touchstart', (e) => {
-    if (e.touches.length === 1) {
-        avatarEditorState.isDragging = true;
-        avatarEditorState.dragStartX = e.touches[0].clientX;
-        avatarEditorState.dragStartY = e.touches[0].clientY;
-    }
-});
-
-avatarCanvas.addEventListener('touchmove', (e) => {
-    if (avatarEditorState.isDragging && e.touches.length === 1) {
-        const deltaX = e.touches[0].clientX - avatarEditorState.dragStartX;
-        const deltaY = e.touches[0].clientY - avatarEditorState.dragStartY;
-        
-        avatarEditorState.offsetX += deltaX;
-        avatarEditorState.offsetY += deltaY;
-        
-        avatarEditorState.dragStartX = e.touches[0].clientX;
-        avatarEditorState.dragStartY = e.touches[0].clientY;
-        
-        drawAvatarPreview();
-    }
-});
-
-avatarCanvas.addEventListener('touchend', () => {
-    avatarEditorState.isDragging = false;
-});
-
-// Рисование превью аватарки
-function drawAvatarPreview() {
-    if (!avatarEditorState.image) return;
-    
-    const canvas = avatarCanvas;
-    const ctx = canvasCtx;
-    const size = 300;
-    
-    canvas.width = size;
-    canvas.height = size;
-    
-    // Очищаем канвас
-    ctx.fillStyle = '#f5f5f5';
-    ctx.fillRect(0, 0, size, size);
-    
-    // Рисуем круг для маски
-    ctx.save();
-    ctx.beginPath();
-    ctx.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2);
-    ctx.clip();
-    
-    // Рисуем изображение
-    const img = avatarEditorState.image;
-    const zoom = avatarEditorState.zoom;
-    const offsetX = avatarEditorState.offsetX;
-    const offsetY = avatarEditorState.offsetY;
-    
-    const scaledWidth = img.width * zoom;
-    const scaledHeight = img.height * zoom;
-    const x = (size - scaledWidth) / 2 + offsetX;
-    const y = (size - scaledHeight) / 2 + offsetY;
-    
-    ctx.drawImage(img, x, y, scaledWidth, scaledHeight);
-    ctx.restore();
-    
-    // Рисуем границу круга
-    ctx.strokeStyle = '#667eea';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2);
-    ctx.stroke();
-}
-
-// Сохранение аватарки
-saveEditorBtn.addEventListener('click', async () => {
-    if (!avatarEditorState.image) return;
-    
-    const canvas = avatarCanvas;
-    canvas.toBlob(async (blob) => {
-        const file = new File([blob], `avatar-${Date.now()}.png`, { type: 'image/png' });
-        
-        const formData = new FormData();
-        formData.append('file', file);
-        
-        try {
-            const response = await fetch('/upload', {
-                method: 'POST',
-                body: formData
-            });
-            
-            const result = await response.json();
-            
-            if (response.ok) {
-                socket.emit('update-avatar', {
-                    username: currentUsername,
-                    avatar_url: result.url
-                });
-                profileAvatar.src = result.url;
-                avatarEditorModal.classList.remove('active');
-                avatarEditorState.image = null;
-                alert('Аватарка сохранена!');
-            }
-        } catch (error) {
-            alert('Ошибка сохранения аватарки: ' + error.message);
-        }
-    }, 'image/png');
-});
-
-
-// ===== ВИДЕОЗВОНКИ =====
-
-// Открытие видеозвонка
-callBtn.addEventListener('click', () => {
-    if (!currentChatUser) return;
-    
-    console.log('📞 Инициирование видеозвонка с:', currentChatUser);
-    
-    // Отправляем уведомление о входящем звонке
-    socket.emit('initiate-call', {
-        from: currentUsername,
-        to: currentChatUser
-    });
-    
-    // Открываем модальное окно
-    startVideoCall(currentChatUser);
-});
-
-// Закрытие видеозвонка
-closeCallBtn.addEventListener('click', () => {
-    endVideoCall();
-});
-
-// Закрытие при клике на фон
-callModal.addEventListener('click', (e) => {
-    if (e.target === callModal) {
-        endVideoCall();
-    }
-});
-
-// Запуск видеозвонка
-function startVideoCall(username) {
-    console.log('📞 Запуск аудиозвонка с:', username);
-    
-    // Генерируем уникальный ID комнаты на основе имён пользователей
-    const roomId = [currentUsername, username].sort().join('-');
-    
-    // Очищаем контейнер
-    callContainer.innerHTML = `
-        <div style="width: 100%; height: 100%; display: flex; flex-direction: column; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); align-items: center; justify-content: center; gap: 20px;">
-            <div style="text-align: center; color: white;">
-                <div style="font-size: 60px; margin-bottom: 20px;">📞</div>
-                <h2 style="margin: 0; font-size: 24px;">Звонок с ${username}</h2>
-                <p id="call-status" style="margin: 10px 0; font-size: 14px; opacity: 0.8;">Подключение...</p>
-            </div>
-            <div style="padding: 16px; background: rgba(0,0,0,0.2); border-radius: 12px; display: flex; gap: 12px;">
-                <button id="toggle-audio-btn" style="width: 50px; height: 50px; border-radius: 50%; background: #4caf50; color: white; border: none; font-size: 20px; cursor: pointer; transition: all 0.2s;">
-                    <i class="fas fa-microphone"></i>
-                </button>
-                <button id="end-call-btn" style="width: 50px; height: 50px; border-radius: 50%; background: #ff4757; color: white; border: none; font-size: 20px; cursor: pointer; transition: all 0.2s;">
-                    <i class="fas fa-phone"></i>
-                </button>
-            </div>
-        </div>
-    `;
-    
-    // Показываем модальное окно
-    callModal.classList.add('active');
-    
-    // Инициализируем WebRTC для аудио
-    initAudioCall(username, roomId);
-}
-
-// WebRTC переменные
-let localStream = null;
-let peerConnection = null;
-let dataChannel = null;
-
-// Инициализация WebRTC
-async function initWebRTC(username, roomId) {
-    try {
-        console.log('🔧 Инициализация WebRTC');
-        
-        // Получаем доступ к камере и микрофону
-        localStream = await navigator.mediaDevices.getUserMedia({
-            video: { width: { ideal: 1280 }, height: { ideal: 720 } },
-            audio: true
-        });
-        
-        const localVideo = document.getElementById('local-video');
-        localVideo.srcObject = localStream;
-        
-        console.log('✅ Камера и микрофон получены');
-        
-        // Создаём peer connection
-        const configuration = {
-            iceServers: [
-                { urls: ['stun:stun.l.google.com:19302'] },
-                { urls: ['stun:stun1.l.google.com:19302'] }
-            ]
-        };
-        
-        peerConnection = new RTCPeerConnection(configuration);
-        
-        // Добавляем локальный поток
-        localStream.getTracks().forEach(track => {
-            peerConnection.addTrack(track, localStream);
-        });
-        
-        // Обработчик удалённого потока
-        peerConnection.ontrack = (event) => {
-            console.log('📹 Получен удалённый поток');
-            const remoteVideo = document.getElementById('remote-video');
-            if (remoteVideo) {
-                remoteVideo.srcObject = event.streams[0];
-            }
-        };
-        
-        // Обработчик ICE кандидатов
-        peerConnection.onicecandidate = (event) => {
-            if (event.candidate) {
-                socket.emit('ice-candidate', {
-                    to: username,
-                    candidate: event.candidate
-                });
-            }
-        };
-        
-        // Создаём offer
-        const offer = await peerConnection.createOffer();
-        await peerConnection.setLocalDescription(offer);
-        
-        // Отправляем offer
-        socket.emit('call-offer', {
-            to: username,
-            offer: offer
-        });
-        
-        console.log('� Offer отправлен');
-        
-        // Обработчики кнопок
-        document.getElementById('toggle-audio-btn').addEventListener('click', () => {
-            const audioTracks = localStream.getAudioTracks();
-            audioTracks.forEach(track => {
-                track.enabled = !track.enabled;
-                const btn = document.getElementById('toggle-audio-btn');
-                btn.style.background = track.enabled ? '#667eea' : '#ff4757';
-            });
-        });
-        
-        document.getElementById('toggle-video-btn').addEventListener('click', () => {
-            const videoTracks = localStream.getVideoTracks();
-            videoTracks.forEach(track => {
-                track.enabled = !track.enabled;
-                const btn = document.getElementById('toggle-video-btn');
-                btn.style.background = track.enabled ? '#667eea' : '#ff4757';
-            });
-        });
-        
-        document.getElementById('end-call-btn').addEventListener('click', () => {
-            endVideoCall();
-        });
-        
-    } catch (error) {
-        console.error('❌ Ошибка WebRTC:', error);
-        alert('Ошибка при подключении камеры: ' + error.message);
-        endVideoCall();
-    }
-}
-
-// Завершение видеозвонка
-function endVideoCall() {
-    console.log('📞 Завершение видеозвонка');
-    
-    // Останавливаем локальный поток
-    if (localStream) {
-        localStream.getTracks().forEach(track => track.stop());
-        localStream = null;
-    }
-    
-    // Закрываем peer connection
-    if (peerConnection) {
-        peerConnection.close();
-        peerConnection = null;
-    }
-    
-    callContainer.innerHTML = '';
-    callModal.classList.remove('active');
-}
-
-// Обработчик входящего звонка
-socket.on('incoming-call', (data) => {
-    console.log('📞 Входящий звонок от:', data.from);
-    
-    const accept = confirm(`${data.from} звонит вам. Принять звонок?`);
-    
-    if (accept) {
-        startVideoCall(data.from);
-    } else {
-        socket.emit('reject-call', {
-            from: currentUsername,
-            to: data.from
-        });
-    }
-});
-
-// Обработчик отклонённого звонка
-socket.on('call-rejected', (data) => {
-    console.log('❌ Звонок отклонён:', data.from);
-    alert(`${data.from} отклонил звонок`);
-    endVideoCall();
-});
-
-
-// Обработчик call-offer
-socket.on('call-offer', async (data) => {
-    try {
-        console.log('📤 Получен offer от:', data.from);
-        
-        const configuration = {
-            iceServers: [
-                { urls: ['stun:stun.l.google.com:19302'] },
-                { urls: ['stun:stun1.l.google.com:19302'] }
-            ]
-        };
-        
-        peerConnection = new RTCPeerConnection(configuration);
-        
-        // Получаем доступ к камере и микрофону
-        localStream = await navigator.mediaDevices.getUserMedia({
-            video: { width: { ideal: 1280 }, height: { ideal: 720 } },
-            audio: true
-        });
-        
-        const localVideo = document.getElementById('local-video');
-        if (localVideo) {
-            localVideo.srcObject = localStream;
-        }
-        
-        // Добавляем локальный поток
-        localStream.getTracks().forEach(track => {
-            peerConnection.addTrack(track, localStream);
-        });
-        
-        // Обработчик удалённого потока
-        peerConnection.ontrack = (event) => {
-            console.log('📹 Получен удалённый поток');
-            const remoteVideo = document.getElementById('remote-video');
-            if (remoteVideo) {
-                remoteVideo.srcObject = event.streams[0];
-            }
-        };
-        
-        // Обработчик ICE кандидатов
-        peerConnection.onicecandidate = (event) => {
-            if (event.candidate) {
-                socket.emit('ice-candidate', {
-                    to: data.from,
-                    candidate: event.candidate
-                });
-            }
-        };
-        
-        // Устанавливаем remote description
-        await peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
-        
-        // Создаём answer
-        const answer = await peerConnection.createAnswer();
-        await peerConnection.setLocalDescription(answer);
-        
-        // Отправляем answer
-        socket.emit('call-answer', {
-            to: data.from,
-            answer: answer
-        });
-        
-        console.log('📥 Answer отправлен');
-        
-        // Обработчики кнопок
-        document.getElementById('toggle-audio-btn').addEventListener('click', () => {
-            const audioTracks = localStream.getAudioTracks();
-            audioTracks.forEach(track => {
-                track.enabled = !track.enabled;
-                const btn = document.getElementById('toggle-audio-btn');
-                btn.style.background = track.enabled ? '#667eea' : '#ff4757';
-            });
-        });
-        
-        document.getElementById('toggle-video-btn').addEventListener('click', () => {
-            const videoTracks = localStream.getVideoTracks();
-            videoTracks.forEach(track => {
-                track.enabled = !track.enabled;
-                const btn = document.getElementById('toggle-video-btn');
-                btn.style.background = track.enabled ? '#667eea' : '#ff4757';
-            });
-        });
-        
-        document.getElementById('end-call-btn').addEventListener('click', () => {
-            endVideoCall();
-        });
-        
-    } catch (error) {
-        console.error('❌ Ошибка обработки offer:', error);
-    }
-});
-
-// Обработчик call-answer
-socket.on('call-answer', async (data) => {
-    try {
-        console.log('📥 Получен answer от:', data.from);
-        
-        if (peerConnection) {
-            await peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
-            console.log('✅ Remote description установлен');
-        }
-    } catch (error) {
-        console.error('❌ Ошибка обработки answer:', error);
-    }
-});
-
-// Обработчик ice-candidate
-socket.on('ice-candidate', async (data) => {
-    try {
-        if (peerConnection && data.candidate) {
-            await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
-        }
-    } catch (error) {
-        console.error('❌ Ошибка добавления ICE candidate:', error);
-    }
-});
-
-
-// ===== ЗВОНКИ (ПРОСТЫЕ СИГНАЛЫ) =====
-
-// Переменные для звонков
-let incomingCallModal = document.getElementById('incoming-call-modal');
-let callAcceptBtn = document.getElementById('call-accept-btn');
-let callRejectBtn = document.getElementById('call-reject-btn');
-let incomingCallerName = document.getElementById('incoming-caller-name');
-let incomingCallerStatus = document.getElementById('incoming-caller-status');
-let currentIncomingCaller = null;
-let callRingtone = null;
-
-// Функция для создания звука звонка
-function createRingtone() {
-    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-    const oscillator = audioContext.createOscillator();
-    const gainNode = audioContext.createGain();
-    
-    oscillator.connect(gainNode);
-    gainNode.connect(audioContext.destination);
-    
-    oscillator.frequency.value = 800;
-    oscillator.type = 'sine';
-    
-    gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
-    
-    oscillator.start(audioContext.currentTime);
-    
-    return { oscillator, gainNode, audioContext };
-}
-
-// Функция для воспроизведения звука звонка
-function playRingtone() {
-    try {
-        const ringtone = createRingtone();
-        callRingtone = ringtone;
-        
-        // Пульсирующий звук
-        const now = ringtone.audioContext.currentTime;
-        ringtone.gainNode.setValueAtTime(0.3, now);
-        ringtone.gainNode.linearRampToValueAtTime(0.1, now + 0.3);
-        ringtone.gainNode.linearRampToValueAtTime(0.3, now + 0.6);
-        
-        // Повторяем каждые 2 секунды
-        const interval = setInterval(() => {
-            if (!callRingtone) {
-                clearInterval(interval);
-                return;
-            }
-            const now = ringtone.audioContext.currentTime;
-            ringtone.gainNode.setValueAtTime(0.3, now);
-            ringtone.gainNode.linearRampToValueAtTime(0.1, now + 0.3);
-            ringtone.gainNode.linearRampToValueAtTime(0.3, now + 0.6);
-        }, 2000);
-    } catch (error) {
-        console.error('Ошибка воспроизведения звука:', error);
-    }
-}
-
-// Функция для остановки звука звонка
-function stopRingtone() {
-    if (callRingtone) {
-        try {
-            callRingtone.oscillator.stop();
-            callRingtone.audioContext.close();
-        } catch (e) {
-            console.log('Звук уже остановлен');
-        }
-        callRingtone = null;
-    }
-}
-
-
-
-// Кнопка принять звонок
-if (callAcceptBtn) {
-    callAcceptBtn.addEventListener('click', () => {
-        console.log('✅ Звонок принят от:', currentIncomingCaller);
-        
-        stopRingtone();
-        incomingCallModal.classList.remove('active');
-        
-        // Отправляем подтверждение
-        socket.emit('call-accepted', {
-            from: currentUsername,
-            to: currentIncomingCaller
-        });
-        
-        // Показываем уведомление
-        alert(`Вы приняли звонок от ${currentIncomingCaller}`);
-        
-        currentIncomingCaller = null;
-    });
-}
-
-// Кнопка отклонить звонок
-if (callRejectBtn) {
-    callRejectBtn.addEventListener('click', () => {
-        console.log('❌ Звонок отклонён от:', currentIncomingCaller);
-        
-        stopRingtone();
-        incomingCallModal.classList.remove('active');
-        
-        // Отправляем отклонение
-        socket.emit('call-rejected', {
-            from: currentUsername,
-            to: currentIncomingCaller
-        });
-        
-        currentIncomingCaller = null;
-    });
-}
-
-// Обработчик входящего звонка
-socket.on('incoming-call', (data) => {
-    console.log('📞 Входящий звонок от:', data.from);
-    
-    currentIncomingCaller = data.from;
-    incomingCallerName.textContent = `Звонит ${data.from}`;
-    incomingCallerStatus.textContent = 'Нажмите для ответа';
-    
-    // Показываем модальное окно
-    incomingCallModal.classList.add('active');
-    
-    // Воспроизводим звук
-    playRingtone();
-    
-    // Также показываем браузерное уведомление
-    if ('Notification' in window && Notification.permission === 'granted') {
-        new Notification(`Звонок от ${data.from}`, {
-            body: 'Нажмите для ответа',
-            icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y="75" font-size="75">📞</text></svg>',
-            tag: `call-${data.from}`
-        });
-    }
-});
-
-// Обработчик принятого звонка
-socket.on('call-accepted', (data) => {
-    console.log('✅ Звонок принят:', data.from);
-    alert(`${data.from} принял ваш звонок!`);
-});
-
-// Обработчик отклонённого звонка
-socket.on('call-rejected', (data) => {
-    console.log('❌ Звонок отклонён:', data.from);
-    alert(`${data.from} отклонил ваш звонок`);
-});
-
-
-
 
 // ===== РЕАЛЬНЫЕ АУДИОЗВОНКИ (WEBRTC) =====
-
-let remoteAudio = null;
-let callStartTime = null;
-let callDurationInterval = null;
-let isMuted = false;
 
 const activeCallModal = document.getElementById('active-call-modal');
 const activeCallName = document.getElementById('active-call-name');
@@ -2279,10 +993,13 @@ const iceServers = {
 
 // Инициирование реального звонка
 function initiateAudioCall() {
-    if (!currentChatUser) return;
-    
+    console.log('📞 initiateAudioCall вызвана, currentChatUser:', currentChatUser);
+    if (!currentChatUser) {
+        console.error('❌ Нет выбранного пользователя для звонка');
+        alert('Выберите пользователя для звонка');
+        return;
+    }
     console.log('📞 Инициирование реального звонка с:', currentChatUser);
-    
     navigator.mediaDevices.getUserMedia({
         audio: {
             echoCancellation: true,
@@ -2292,16 +1009,10 @@ function initiateAudioCall() {
     }).then(stream => {
         localStream = stream;
         console.log('✅ Микрофон получен');
-        
-        // Создаём peer connection
         peerConnection = new RTCPeerConnection(iceServers);
-        
-        // Добавляем локальный поток
         localStream.getTracks().forEach(track => {
             peerConnection.addTrack(track, localStream);
         });
-        
-        // Обработчик удалённого потока
         peerConnection.ontrack = (event) => {
             console.log('📹 Получен удалённый аудио поток');
             if (!remoteAudio) {
@@ -2310,8 +1021,6 @@ function initiateAudioCall() {
             }
             remoteAudio.srcObject = event.streams[0];
         };
-        
-        // Обработчик состояния соединения
         peerConnection.onconnectionstatechange = () => {
             console.log('🔗 Состояние соединения:', peerConnection.connectionState);
             if (peerConnection.connectionState === 'failed') {
@@ -2319,8 +1028,6 @@ function initiateAudioCall() {
                 endCall();
             }
         };
-        
-        // Обработчик ICE кандидатов
         peerConnection.onicecandidate = (event) => {
             if (event.candidate) {
                 socket.emit('ice-candidate', {
@@ -2329,25 +1036,20 @@ function initiateAudioCall() {
                 });
             }
         };
-        
-        // Создаём offer
         peerConnection.createOffer({
             offerToReceiveAudio: true
         }).then(offer => {
             return peerConnection.setLocalDescription(offer);
         }).then(() => {
-            // Отправляем offer
             socket.emit('call-offer', {
                 to: currentChatUser,
                 offer: peerConnection.localDescription
             });
-            
             console.log('📤 Offer отправлен');
         }).catch(error => {
             console.error('❌ Ошибка создания offer:', error);
             alert('Ошибка: ' + error.message);
         });
-        
     }).catch(error => {
         console.error('❌ Ошибка при получении микрофона:', error);
         alert('Ошибка доступа к микрофону: ' + error.message);
@@ -2355,10 +1057,15 @@ function initiateAudioCall() {
 }
 
 if (callBtn) {
-    callBtn.addEventListener('click', initiateAudioCall);
+    console.log('✅ callBtn найден, добавляем обработчик');
+    callBtn.addEventListener('click', () => {
+        console.log('🔘 Кнопка звонка нажата, currentChatUser:', currentChatUser);
+        initiateAudioCall();
+    });
+} else {
+    console.error('❌ callBtn не найден в DOM');
 }
 
-// Кнопка отключить микрофон
 if (muteBtn) {
     muteBtn.addEventListener('click', () => {
         if (localStream) {
@@ -2367,52 +1074,37 @@ if (muteBtn) {
                 track.enabled = !track.enabled;
                 isMuted = !track.enabled;
             });
-            
             muteBtn.classList.toggle('muted');
             muteBtn.innerHTML = isMuted ? '<i class="fas fa-microphone-slash"></i>' : '<i class="fas fa-microphone"></i>';
         }
     });
 }
 
-// Кнопка завершить звонок
 if (endActiveCallBtn) {
     endActiveCallBtn.addEventListener('click', () => {
         endCall();
     });
 }
 
-// Функция завершения звонка
 function endCall() {
     console.log('📞 Завершение звонка');
-    
-    // Останавливаем локальный поток
     if (localStream) {
         localStream.getTracks().forEach(track => track.stop());
         localStream = null;
     }
-    
-    // Закрываем peer connection
     if (peerConnection) {
         peerConnection.close();
         peerConnection = null;
     }
-    
-    // Закрываем удалённый аудио
     if (remoteAudio) {
         remoteAudio.pause();
         remoteAudio = null;
     }
-    
-    // Останавливаем таймер
     if (callDurationInterval) {
         clearInterval(callDurationInterval);
         callDurationInterval = null;
     }
-    
-    // Скрываем модальное окно
     activeCallModal.classList.remove('active');
-    
-    // Отправляем сигнал завершения
     if (currentChatUser) {
         socket.emit('call-ended', {
             from: currentUsername,
@@ -2421,11 +1113,9 @@ function endCall() {
     }
 }
 
-// Обработчик call-offer
 socket.on('call-offer', async (data) => {
     try {
         console.log('📤 Получен offer от:', data.from);
-        
         if (!localStream) {
             localStream = await navigator.mediaDevices.getUserMedia({
                 audio: {
@@ -2435,15 +1125,10 @@ socket.on('call-offer', async (data) => {
                 }
             });
         }
-        
         peerConnection = new RTCPeerConnection(iceServers);
-        
-        // Добавляем локальный поток
         localStream.getTracks().forEach(track => {
             peerConnection.addTrack(track, localStream);
         });
-        
-        // Обработчик удалённого потока
         peerConnection.ontrack = (event) => {
             console.log('📹 Получен удалённый аудио поток');
             if (!remoteAudio) {
@@ -2451,19 +1136,13 @@ socket.on('call-offer', async (data) => {
                 remoteAudio.autoplay = true;
             }
             remoteAudio.srcObject = event.streams[0];
-            
-            // Показываем модальное окно активного звонка
             activeCallName.textContent = `Звонок с ${data.from}`;
             activeCallModal.classList.add('active');
             startCallTimer();
         };
-        
-        // Обработчик состояния соединения
         peerConnection.onconnectionstatechange = () => {
             console.log('🔗 Состояние соединения:', peerConnection.connectionState);
         };
-        
-        // Обработчик ICE кандидатов
         peerConnection.onicecandidate = (event) => {
             if (event.candidate) {
                 socket.emit('ice-candidate', {
@@ -2472,36 +1151,24 @@ socket.on('call-offer', async (data) => {
                 });
             }
         };
-        
-        // Устанавливаем remote description
         await peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
-        
-        // Создаём answer
         const answer = await peerConnection.createAnswer();
         await peerConnection.setLocalDescription(answer);
-        
-        // Отправляем answer
         socket.emit('call-answer', {
             to: data.from,
             answer: answer
         });
-        
         console.log('📥 Answer отправлен');
-        
     } catch (error) {
         console.error('❌ Ошибка обработки offer:', error);
     }
 });
 
-// Обработчик call-answer
 socket.on('call-answer', async (data) => {
     try {
         console.log('📥 Получен answer от:', data.from);
-        
         if (peerConnection) {
             await peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
-            
-            // Показываем модальное окно активного звонка
             activeCallName.textContent = `Звонок с ${data.from}`;
             activeCallModal.classList.add('active');
             startCallTimer();
@@ -2511,7 +1178,6 @@ socket.on('call-answer', async (data) => {
     }
 });
 
-// Обработчик ice-candidate
 socket.on('ice-candidate', async (data) => {
     try {
         if (peerConnection && data.candidate) {
@@ -2522,14 +1188,12 @@ socket.on('ice-candidate', async (data) => {
     }
 });
 
-// Обработчик завершения звонка
 socket.on('call-ended', (data) => {
     console.log('📞 Звонок завершён:', data.from);
     endCall();
     alert(`${data.from} завершил звонок`);
 });
 
-// Функция для отсчёта времени звонка
 function startCallTimer() {
     callStartTime = Date.now();
     callDurationInterval = setInterval(() => {
