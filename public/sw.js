@@ -1,7 +1,9 @@
-const CACHE_NAME = 'rodnya-v21.0';
+const CACHE_NAME = 'rodnya-v15.1';
 const urlsToCache = [
   '/',
   '/index.html',
+  '/style.css',
+  '/script.js',
   '/manifest.json',
   'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css'
 ];
@@ -29,15 +31,6 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
-  // Для JS и CSS - НИКОГДА не кэшируем, всегда берём с сервера
-  if (event.request.url.endsWith('.js') || event.request.url.endsWith('.css')) {
-    event.respondWith(
-      fetch(event.request, { cache: 'no-store' })
-        .catch(() => caches.match(event.request))
-    );
-    return;
-  }
-  
   // Для HTML - сначала сеть, потом кеш
   if (event.request.headers.get('accept').includes('text/html')) {
     event.respondWith(

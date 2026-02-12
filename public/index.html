@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, shrink-to-fit=no">
     <title>Родня - Социальная сеть</title>
-    <link rel="stylesheet" href="style.css?v=22.0">
+    <link rel="stylesheet" href="style.css?v=15.1">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#4facfe">
@@ -90,9 +90,6 @@
                         <i class="fas fa-arrow-left"></i> Общий чат
                     </button>
                     <h2 id="chat-title">Общий чат</h2>
-                    <button class="call-btn" id="call-btn" style="display: none;" title="Позвонить">
-                        <i class="fas fa-phone"></i>
-                    </button>
                 </div>
 
                 <div class="messages" id="messages">
@@ -258,48 +255,8 @@
         </div>
     </div>
 
-    <!-- Модальное окно входящего звонка -->
-    <div class="incoming-call-modal" id="incoming-call-modal">
-        <div class="incoming-call-content">
-            <div class="call-animation">
-                <div class="call-pulse"></div>
-                <div class="call-pulse"></div>
-                <div class="call-pulse"></div>
-            </div>
-            <h2 id="incoming-caller-name">Входящий звонок</h2>
-            <p id="incoming-caller-status">Звонит...</p>
-            <div class="incoming-call-buttons">
-                <button class="call-accept-btn" id="call-accept-btn">
-                    <i class="fas fa-phone"></i>
-                </button>
-                <button class="call-reject-btn" id="call-reject-btn">
-                    <i class="fas fa-phone"></i>
-                </button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Модальное окно активного звонка -->
-    <div class="active-call-modal" id="active-call-modal">
-        <div class="active-call-content">
-            <h2 id="active-call-name">Звонок</h2>
-            <p id="active-call-duration">00:00</p>
-            <div class="active-call-controls">
-                <button class="call-control-btn mute-btn" id="mute-btn" title="Отключить микрофон">
-                    <i class="fas fa-microphone"></i>
-                </button>
-                <button class="call-control-btn end-call-btn" id="end-active-call-btn" title="Завершить звонок">
-                    <i class="fas fa-phone"></i>
-                </button>
-                <button class="call-control-btn speaker-btn" id="speaker-btn" title="Громкость">
-                    <i class="fas fa-volume-up"></i>
-                </button>
-            </div>
-        </div>
-    </div>
-
     <script src="/socket.io/socket.io.js"></script>
-    <script src="script.js?v=22.0"></script>
+    <script src="script.js?v=15.1"></script>
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
