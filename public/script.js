@@ -123,6 +123,10 @@ const toggleSidebarBtn = document.getElementById('toggle-sidebar-btn');
 const notificationPermissionBanner = document.getElementById('notification-permission-banner');
 const allowNotificationsBtn = document.getElementById('allow-notifications-btn');
 const dismissNotificationsBtn = document.getElementById('dismiss-notifications-btn');
+const callBtn = document.getElementById('call-btn');
+const callModal = document.getElementById('call-modal');
+const closeCallBtn = document.getElementById('close-call');
+const callContainer = document.getElementById('call-container');
 
 // Переменные
 let currentUsername = '';
@@ -656,6 +660,7 @@ function openPrivateChat(username) {
     const chatTitle = document.getElementById('chat-title');
     
     backBtn.style.display = 'flex';
+    callBtn.style.display = 'flex';
     
     // Получаем информацию о пользователе
     const userInfo = allUsers.find(u => u.username === username);
@@ -701,6 +706,7 @@ function backToGeneralChat() {
     const chatTitle = document.getElementById('chat-title');
     
     backBtn.style.display = 'none';
+    callBtn.style.display = 'none';
     chatTitle.textContent = 'Общий чат';
     messagesContainer.innerHTML = `
         <div class="welcome-message">
@@ -1367,9 +1373,12 @@ function displayMessage(data) {
     const senderName = data.username || data.from;
     const formattedTime = formatTime(data.timestamp);
     
-    // Получаем аватарку пользователя
-    const userInfo = allUsers.find(u => u.username === senderName);
-    const avatarUrl = userInfo && userInfo.avatar_url ? userInfo.avatar_url : null;
+    // Получаем аватарку - сначала из сообщения, потом из allUsers
+    let avatarUrl = data.avatar_url;
+    if (!avatarUrl) {
+        const userInfo = allUsers.find(u => u.username === senderName);
+        avatarUrl = userInfo && userInfo.avatar_url ? userInfo.avatar_url : null;
+    }
     
     // Галочки для статуса прочитанности
     let checkmarks = '';
@@ -1768,4 +1777,173 @@ saveEditorBtn.addEventListener('click', async () => {
             alert('Ошибка сохранения аватарки: ' + error.message);
         }
     }, 'image/png');
+});
+
+
+// ===== ВИДЕОЗВОНКИ =====
+
+// Открытие видеозвонка
+callBtn.addEventListener('click', () => {
+    if (!currentChatUser) return;
+    
+    console.log('📞 Инициирование видеозвонка с:', currentChatUser);
+    
+    // Отправляем уведомление о входящем звонке
+    socket.emit('initiate-call', {
+        from: currentUsername,
+        to: currentChatUser
+    });
+    
+    // Открываем модальное окно
+    startVideoCall(currentChatUser);
+});
+
+// Закрытие видеозвонка
+closeCallBtn.addEventListener('click', () => {
+    endVideoCall();
+});
+
+// Закрытие при клике на фон
+callModal.addEventListener('click', (e) => {
+    if (e.target === callModal) {
+        endVideoCall();
+    }
+});
+
+// Запуск видеозвонка
+function startVideoCall(username) {
+    console.log('🎥 Запуск видеозвонка с:', username);
+    
+    // Генерируем уникальный ID комнаты на основе имён пользователей
+    const roomId = [currentUsername, username].sort().join('-');
+    
+    // Очищаем контейнер
+    callContainer.innerHTML = '<div id="jitsi-container"></div>';
+    
+    // Загружаем Jitsi Meet
+    const script = document.createElement('script');
+    script.src = 'https://meet.jit.si/external_api.js';
+    script.onload = () => {
+        initJitsiMeet(roomId, username);
+    };
+    document.head.appendChild(script);
+    
+    // Показываем модальное окно
+    callModal.classList.add('active');
+}
+
+// Инициализация Jitsi Meet
+function initJitsiMeet(roomId, otherUsername) {
+    console.log('🔧 Инициализация Jitsi Meet для комнаты:', roomId);
+    
+    const options = {
+        roomName: roomId,
+        width: '100%',
+        height: '100%',
+        parentNode: document.querySelector('#jitsi-container'),
+        configOverwrite: {
+            startWithAudioMuted: false,
+            startWithVideoMuted: false,
+            disableSimulcast: false,
+            enableLayerSuspension: true,
+            constraints: {
+                video: {
+                    height: {
+                        ideal: 720,
+                        max: 720,
+                        min: 240
+                    }
+                }
+            }
+        },
+        interfaceConfigOverwrite: {
+            DEFAULT_LANGUAGE: 'ru',
+            SHOW_JITSI_WATERMARK: false,
+            SHOW_WATERMARK_FOR_GUESTS: false,
+            MOBILE_APP_PROMO: false,
+            SHOW_PROMOTIONAL_CLOSE_PAGE: false,
+            TOOLBAR_BUTTONS: [
+                'microphone',
+                'camera',
+                'closedcaptions',
+                'desktop',
+                'fullscreen',
+                'fodeviceselection',
+                'hangup',
+                'chat',
+                'settings',
+                'raisehand',
+                'videoquality',
+                'filmstrip',
+                'stats',
+                'shortcuts',
+                'tileview',
+                'select-background',
+                'download'
+            ],
+            LANG_DETECTION: true,
+            AUTHENTICATION_ENABLE: false,
+            SHOW_CHROME_EXTENSION_BANNER: false
+        },
+        userInfo: {
+            displayName: currentUsername
+        }
+    };
+    
+    try {
+        window.jitsiApi = new window.JitsiMeetExternalAPI('meet.jit.si', options);
+        
+        window.jitsiApi.addEventListener('videoConferenceJoined', () => {
+            console.log('✅ Присоединился к видеоконференции');
+        });
+        
+        window.jitsiApi.addEventListener('videoConferenceLocked', () => {
+            console.log('🔒 Видеоконференция заблокирована');
+        });
+        
+        window.jitsiApi.addEventListener('readyToClose', () => {
+            console.log('👋 Видеоконференция закрыта');
+            endVideoCall();
+        });
+    } catch (error) {
+        console.error('❌ Ошибка инициализации Jitsi:', error);
+        alert('Ошибка при подключении к видеозвонку');
+        endVideoCall();
+    }
+}
+
+// Завершение видеозвонка
+function endVideoCall() {
+    console.log('📞 Завершение видеозвонка');
+    
+    if (window.jitsiApi) {
+        window.jitsiApi.dispose();
+        window.jitsiApi = null;
+    }
+    
+    callContainer.innerHTML = '';
+    callModal.classList.remove('active');
+}
+
+// Обработчик входящего звонка
+socket.on('incoming-call', (data) => {
+    console.log('📞 Входящий звонок от:', data.from);
+    
+    const accept = confirm(`${data.from} звонит вам. Принять звонок?`);
+    
+    if (accept) {
+        startVideoCall(data.from);
+    } else {
+        socket.emit('reject-call', {
+            from: currentUsername,
+            to: data.from
+        });
+    }
+});
+
+// Обработчик отклонённого звонка
+socket.on('call-rejected', (data) => {
+    console.log('❌ Звонок отклонён:', data.from);
+    alert(`${data.from} отклонил звонок`);
+    endVideoCall();
 });

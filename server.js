@@ -431,6 +431,17 @@ io.on('connection', (socket) => {
                 [currentUser, otherUser]
             );
             
+            // Получаем аватарки обоих пользователей
+            const usersResult = await pool.query(
+                'SELECT username, avatar_url FROM users WHERE username = $1 OR username = $2',
+                [currentUser, otherUser]
+            );
+            
+            const avatarMap = {};
+            usersResult.rows.forEach(user => {
+                avatarMap[user.username] = user.avatar_url;
+            });
+            
             const messages = result.rows.map(msg => ({
                 id: msg.id.toString(),
                 from: msg.from_user,
@@ -442,7 +453,8 @@ io.on('connection', (socket) => {
                 mimetype: msg.mimetype,
                 caption: msg.caption,
                 timestamp: msg.created_at,
-                type: msg.type
+                type: msg.type,
+                avatar_url: avatarMap[msg.from_user] || null
             }));
             
             socket.emit('private-messages-loaded', messages);
@@ -813,6 +825,65 @@ io.on('connection', (socket) => {
                 username: username, 
                 status: 'offline' 
             });
+        }
+    });
+    
+    // Инициирование видеозвонка
+    socket.on('initiate-call', (data) => {
+        try {
+            const { from, to } = data;
+            console.log(`📞 Звонок от ${from} к ${to}`);
+            
+            // Ищем сокет получателя
+            let recipientSocketId = null;
+            for (const [socketId, user] of connectedUsers.entries()) {
+                if (user.username === to) {
+                    recipientSocketId = socketId;
+                    break;
+                }
+            }
+            
+            if (recipientSocketId) {
+                // Отправляем уведомление о входящем звонке
+                io.to(recipientSocketId).emit('incoming-call', {
+                    from: from,
+                    to: to
+                });
+                console.log(`✅ Уведомление о звонке отправлено ${to}`);
+            } else {
+                console.log(`❌ Пользователь ${to} не найден онлайн`);
+                socket.emit('call-rejected', {
+                    from: to,
+                    reason: 'offline'
+                });
+            }
+        } catch (error) {
+            console.error('❌ Ошибка инициирования звонка:', error);
+        }
+    });
+    
+    // Отклонение звонка
+    socket.on('reject-call', (data) => {
+        try {
+            const { from, to } = data;
+            console.log(`❌ Звонок отклонён: ${from} отклонил звонок от ${to}`);
+            
+            // Ищем сокет инициатора
+            let initiatorSocketId = null;
+            for (const [socketId, user] of connectedUsers.entries()) {
+                if (user.username === to) {
+                    initiatorSocketId = socketId;
+                    break;
+                }
+            }
+            
+            if (initiatorSocketId) {
+                io.to(initiatorSocketId).emit('call-rejected', {
+                    from: from
+                });
+            }
+        } catch (error) {
+            console.error('❌ Ошибка отклонения звонка:', error);
         }
     });
 });

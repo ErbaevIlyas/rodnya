@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, shrink-to-fit=no">
     <title>Родня - Социальная сеть</title>
-    <link rel="stylesheet" href="style.css?v=15.1">
+    <link rel="stylesheet" href="style.css?v=16.0">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#4facfe">
@@ -90,6 +90,9 @@
                         <i class="fas fa-arrow-left"></i> Общий чат
                     </button>
                     <h2 id="chat-title">Общий чат</h2>
+                    <button class="call-btn" id="call-btn" style="display: none;" title="Видеозвонок">
+                        <i class="fas fa-video"></i>
+                    </button>
                 </div>
 
                 <div class="messages" id="messages">
@@ -255,8 +258,21 @@
         </div>
     </div>
 
+    <!-- Модальное окно для видеозвонка -->
+    <div class="call-modal" id="call-modal">
+        <div class="call-content">
+            <button class="close-call" id="close-call">&times;</button>
+            <div class="call-header">
+                <h2 id="call-title">Видеозвонок</h2>
+            </div>
+            <div class="call-container" id="call-container">
+                <!-- Jitsi Meet будет встроен сюда -->
+            </div>
+        </div>
+    </div>
+
     <script src="/socket.io/socket.io.js"></script>
-    <script src="script.js?v=15.1"></script>
+    <script src="script.js?v=16.0"></script>
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
