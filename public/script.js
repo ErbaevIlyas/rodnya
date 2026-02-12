@@ -1812,26 +1812,24 @@ callModal.addEventListener('click', (e) => {
 
 // Запуск видеозвонка
 function startVideoCall(username) {
-    console.log('🎥 Запуск видеозвонка с:', username);
+    console.log('📞 Запуск аудиозвонка с:', username);
     
     // Генерируем уникальный ID комнаты на основе имён пользователей
     const roomId = [currentUsername, username].sort().join('-');
     
     // Очищаем контейнер
     callContainer.innerHTML = `
-        <div style="width: 100%; height: 100%; display: flex; flex-direction: column; background: #000;">
-            <div style="flex: 1; display: flex; gap: 10px; padding: 10px; overflow: hidden;">
-                <video id="local-video" autoplay muted playsinline style="flex: 1; background: #000; border-radius: 8px; max-width: 50%;"></video>
-                <video id="remote-video" autoplay playsinline style="flex: 1; background: #000; border-radius: 8px; max-width: 50%;"></video>
+        <div style="width: 100%; height: 100%; display: flex; flex-direction: column; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); align-items: center; justify-content: center; gap: 20px;">
+            <div style="text-align: center; color: white;">
+                <div style="font-size: 60px; margin-bottom: 20px;">📞</div>
+                <h2 style="margin: 0; font-size: 24px;">Звонок с ${username}</h2>
+                <p id="call-status" style="margin: 10px 0; font-size: 14px; opacity: 0.8;">Подключение...</p>
             </div>
-            <div style="padding: 16px; background: rgba(0,0,0,0.5); display: flex; gap: 12px; justify-content: center;">
-                <button id="toggle-audio-btn" style="width: 50px; height: 50px; border-radius: 50%; background: #667eea; color: white; border: none; font-size: 20px; cursor: pointer;">
+            <div style="padding: 16px; background: rgba(0,0,0,0.2); border-radius: 12px; display: flex; gap: 12px;">
+                <button id="toggle-audio-btn" style="width: 50px; height: 50px; border-radius: 50%; background: #4caf50; color: white; border: none; font-size: 20px; cursor: pointer; transition: all 0.2s;">
                     <i class="fas fa-microphone"></i>
                 </button>
-                <button id="toggle-video-btn" style="width: 50px; height: 50px; border-radius: 50%; background: #667eea; color: white; border: none; font-size: 20px; cursor: pointer;">
-                    <i class="fas fa-video"></i>
-                </button>
-                <button id="end-call-btn" style="width: 50px; height: 50px; border-radius: 50%; background: #ff4757; color: white; border: none; font-size: 20px; cursor: pointer;">
+                <button id="end-call-btn" style="width: 50px; height: 50px; border-radius: 50%; background: #ff4757; color: white; border: none; font-size: 20px; cursor: pointer; transition: all 0.2s;">
                     <i class="fas fa-phone"></i>
                 </button>
             </div>
@@ -1841,8 +1839,8 @@ function startVideoCall(username) {
     // Показываем модальное окно
     callModal.classList.add('active');
     
-    // Инициализируем WebRTC
-    initWebRTC(username, roomId);
+    // Инициализируем WebRTC для аудио
+    initAudioCall(username, roomId);
 }
 
 // WebRTC переменные
@@ -2102,3 +2100,442 @@ socket.on('ice-candidate', async (data) => {
         console.error('❌ Ошибка добавления ICE candidate:', error);
     }
 });
+
+
+// ===== ЗВОНКИ (ПРОСТЫЕ СИГНАЛЫ) =====
+
+// Переменные для звонков
+let incomingCallModal = document.getElementById('incoming-call-modal');
+let callAcceptBtn = document.getElementById('call-accept-btn');
+let callRejectBtn = document.getElementById('call-reject-btn');
+let incomingCallerName = document.getElementById('incoming-caller-name');
+let incomingCallerStatus = document.getElementById('incoming-caller-status');
+let currentIncomingCaller = null;
+let callRingtone = null;
+
+// Функция для создания звука звонка
+function createRingtone() {
+    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    const oscillator = audioContext.createOscillator();
+    const gainNode = audioContext.createGain();
+    
+    oscillator.connect(gainNode);
+    gainNode.connect(audioContext.destination);
+    
+    oscillator.frequency.value = 800;
+    oscillator.type = 'sine';
+    
+    gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+    
+    oscillator.start(audioContext.currentTime);
+    
+    return { oscillator, gainNode, audioContext };
+}
+
+// Функция для воспроизведения звука звонка
+function playRingtone() {
+    try {
+        const ringtone = createRingtone();
+        callRingtone = ringtone;
+        
+        // Пульсирующий звук
+        const now = ringtone.audioContext.currentTime;
+        ringtone.gainNode.setValueAtTime(0.3, now);
+        ringtone.gainNode.linearRampToValueAtTime(0.1, now + 0.3);
+        ringtone.gainNode.linearRampToValueAtTime(0.3, now + 0.6);
+        
+        // Повторяем каждые 2 секунды
+        const interval = setInterval(() => {
+            if (!callRingtone) {
+                clearInterval(interval);
+                return;
+            }
+            const now = ringtone.audioContext.currentTime;
+            ringtone.gainNode.setValueAtTime(0.3, now);
+            ringtone.gainNode.linearRampToValueAtTime(0.1, now + 0.3);
+            ringtone.gainNode.linearRampToValueAtTime(0.3, now + 0.6);
+        }, 2000);
+    } catch (error) {
+        console.error('Ошибка воспроизведения звука:', error);
+    }
+}
+
+// Функция для остановки звука звонка
+function stopRingtone() {
+    if (callRingtone) {
+        try {
+            callRingtone.oscillator.stop();
+            callRingtone.audioContext.close();
+        } catch (e) {
+            console.log('Звук уже остановлен');
+        }
+        callRingtone = null;
+    }
+}
+
+
+
+// Кнопка принять звонок
+if (callAcceptBtn) {
+    callAcceptBtn.addEventListener('click', () => {
+        console.log('✅ Звонок принят от:', currentIncomingCaller);
+        
+        stopRingtone();
+        incomingCallModal.classList.remove('active');
+        
+        // Отправляем подтверждение
+        socket.emit('call-accepted', {
+            from: currentUsername,
+            to: currentIncomingCaller
+        });
+        
+        // Показываем уведомление
+        alert(`Вы приняли звонок от ${currentIncomingCaller}`);
+        
+        currentIncomingCaller = null;
+    });
+}
+
+// Кнопка отклонить звонок
+if (callRejectBtn) {
+    callRejectBtn.addEventListener('click', () => {
+        console.log('❌ Звонок отклонён от:', currentIncomingCaller);
+        
+        stopRingtone();
+        incomingCallModal.classList.remove('active');
+        
+        // Отправляем отклонение
+        socket.emit('call-rejected', {
+            from: currentUsername,
+            to: currentIncomingCaller
+        });
+        
+        currentIncomingCaller = null;
+    });
+}
+
+// Обработчик входящего звонка
+socket.on('incoming-call', (data) => {
+    console.log('📞 Входящий звонок от:', data.from);
+    
+    currentIncomingCaller = data.from;
+    incomingCallerName.textContent = `Звонит ${data.from}`;
+    incomingCallerStatus.textContent = 'Нажмите для ответа';
+    
+    // Показываем модальное окно
+    incomingCallModal.classList.add('active');
+    
+    // Воспроизводим звук
+    playRingtone();
+    
+    // Также показываем браузерное уведомление
+    if ('Notification' in window && Notification.permission === 'granted') {
+        new Notification(`Звонок от ${data.from}`, {
+            body: 'Нажмите для ответа',
+            icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y="75" font-size="75">📞</text></svg>',
+            tag: `call-${data.from}`
+        });
+    }
+});
+
+// Обработчик принятого звонка
+socket.on('call-accepted', (data) => {
+    console.log('✅ Звонок принят:', data.from);
+    alert(`${data.from} принял ваш звонок!`);
+});
+
+// Обработчик отклонённого звонка
+socket.on('call-rejected', (data) => {
+    console.log('❌ Звонок отклонён:', data.from);
+    alert(`${data.from} отклонил ваш звонок`);
+});
+
+
+
+
+// ===== РЕАЛЬНЫЕ АУДИОЗВОНКИ (WEBRTC) =====
+
+let remoteAudio = null;
+let callStartTime = null;
+let callDurationInterval = null;
+let isMuted = false;
+
+const activeCallModal = document.getElementById('active-call-modal');
+const activeCallName = document.getElementById('active-call-name');
+const activeCallDuration = document.getElementById('active-call-duration');
+const muteBtn = document.getElementById('mute-btn');
+const endActiveCallBtn = document.getElementById('end-active-call-btn');
+const speakerBtn = document.getElementById('speaker-btn');
+
+// TURN серверы (бесплатные)
+const iceServers = {
+    iceServers: [
+        { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302', 'stun:stun2.l.google.com:19302', 'stun:stun3.l.google.com:19302', 'stun:stun4.l.google.com:19302'] },
+        { urls: ['stun:stun.stunprotocol.org:3478'] },
+        { urls: ['stun:stun.services.mozilla.com:3478'] },
+        { urls: 'turn:numb.viagenie.ca', credential: 'webrtcdemo', username: 'webrtc@example.com' }
+    ]
+};
+
+// Инициирование реального звонка
+function initiateAudioCall() {
+    if (!currentChatUser) return;
+    
+    console.log('📞 Инициирование реального звонка с:', currentChatUser);
+    
+    navigator.mediaDevices.getUserMedia({
+        audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true
+        }
+    }).then(stream => {
+        localStream = stream;
+        console.log('✅ Микрофон получен');
+        
+        // Создаём peer connection
+        peerConnection = new RTCPeerConnection(iceServers);
+        
+        // Добавляем локальный поток
+        localStream.getTracks().forEach(track => {
+            peerConnection.addTrack(track, localStream);
+        });
+        
+        // Обработчик удалённого потока
+        peerConnection.ontrack = (event) => {
+            console.log('📹 Получен удалённый аудио поток');
+            if (!remoteAudio) {
+                remoteAudio = new Audio();
+                remoteAudio.autoplay = true;
+            }
+            remoteAudio.srcObject = event.streams[0];
+        };
+        
+        // Обработчик состояния соединения
+        peerConnection.onconnectionstatechange = () => {
+            console.log('🔗 Состояние соединения:', peerConnection.connectionState);
+            if (peerConnection.connectionState === 'failed') {
+                alert('Ошибка соединения. Попробуйте ещё раз.');
+                endCall();
+            }
+        };
+        
+        // Обработчик ICE кандидатов
+        peerConnection.onicecandidate = (event) => {
+            if (event.candidate) {
+                socket.emit('ice-candidate', {
+                    to: currentChatUser,
+                    candidate: event.candidate
+                });
+            }
+        };
+        
+        // Создаём offer
+        peerConnection.createOffer({
+            offerToReceiveAudio: true
+        }).then(offer => {
+            return peerConnection.setLocalDescription(offer);
+        }).then(() => {
+            // Отправляем offer
+            socket.emit('call-offer', {
+                to: currentChatUser,
+                offer: peerConnection.localDescription
+            });
+            
+            console.log('📤 Offer отправлен');
+        }).catch(error => {
+            console.error('❌ Ошибка создания offer:', error);
+            alert('Ошибка: ' + error.message);
+        });
+        
+    }).catch(error => {
+        console.error('❌ Ошибка при получении микрофона:', error);
+        alert('Ошибка доступа к микрофону: ' + error.message);
+    });
+}
+
+if (callBtn) {
+    callBtn.addEventListener('click', initiateAudioCall);
+}
+
+// Кнопка отключить микрофон
+if (muteBtn) {
+    muteBtn.addEventListener('click', () => {
+        if (localStream) {
+            const audioTracks = localStream.getAudioTracks();
+            audioTracks.forEach(track => {
+                track.enabled = !track.enabled;
+                isMuted = !track.enabled;
+            });
+            
+            muteBtn.classList.toggle('muted');
+            muteBtn.innerHTML = isMuted ? '<i class="fas fa-microphone-slash"></i>' : '<i class="fas fa-microphone"></i>';
+        }
+    });
+}
+
+// Кнопка завершить звонок
+if (endActiveCallBtn) {
+    endActiveCallBtn.addEventListener('click', () => {
+        endCall();
+    });
+}
+
+// Функция завершения звонка
+function endCall() {
+    console.log('📞 Завершение звонка');
+    
+    // Останавливаем локальный поток
+    if (localStream) {
+        localStream.getTracks().forEach(track => track.stop());
+        localStream = null;
+    }
+    
+    // Закрываем peer connection
+    if (peerConnection) {
+        peerConnection.close();
+        peerConnection = null;
+    }
+    
+    // Закрываем удалённый аудио
+    if (remoteAudio) {
+        remoteAudio.pause();
+        remoteAudio = null;
+    }
+    
+    // Останавливаем таймер
+    if (callDurationInterval) {
+        clearInterval(callDurationInterval);
+        callDurationInterval = null;
+    }
+    
+    // Скрываем модальное окно
+    activeCallModal.classList.remove('active');
+    
+    // Отправляем сигнал завершения
+    if (currentChatUser) {
+        socket.emit('call-ended', {
+            from: currentUsername,
+            to: currentChatUser
+        });
+    }
+}
+
+// Обработчик call-offer
+socket.on('call-offer', async (data) => {
+    try {
+        console.log('📤 Получен offer от:', data.from);
+        
+        if (!localStream) {
+            localStream = await navigator.mediaDevices.getUserMedia({
+                audio: {
+                    echoCancellation: true,
+                    noiseSuppression: true,
+                    autoGainControl: true
+                }
+            });
+        }
+        
+        peerConnection = new RTCPeerConnection(iceServers);
+        
+        // Добавляем локальный поток
+        localStream.getTracks().forEach(track => {
+            peerConnection.addTrack(track, localStream);
+        });
+        
+        // Обработчик удалённого потока
+        peerConnection.ontrack = (event) => {
+            console.log('📹 Получен удалённый аудио поток');
+            if (!remoteAudio) {
+                remoteAudio = new Audio();
+                remoteAudio.autoplay = true;
+            }
+            remoteAudio.srcObject = event.streams[0];
+            
+            // Показываем модальное окно активного звонка
+            activeCallName.textContent = `Звонок с ${data.from}`;
+            activeCallModal.classList.add('active');
+            startCallTimer();
+        };
+        
+        // Обработчик состояния соединения
+        peerConnection.onconnectionstatechange = () => {
+            console.log('🔗 Состояние соединения:', peerConnection.connectionState);
+        };
+        
+        // Обработчик ICE кандидатов
+        peerConnection.onicecandidate = (event) => {
+            if (event.candidate) {
+                socket.emit('ice-candidate', {
+                    to: data.from,
+                    candidate: event.candidate
+                });
+            }
+        };
+        
+        // Устанавливаем remote description
+        await peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
+        
+        // Создаём answer
+        const answer = await peerConnection.createAnswer();
+        await peerConnection.setLocalDescription(answer);
+        
+        // Отправляем answer
+        socket.emit('call-answer', {
+            to: data.from,
+            answer: answer
+        });
+        
+        console.log('📥 Answer отправлен');
+        
+    } catch (error) {
+        console.error('❌ Ошибка обработки offer:', error);
+    }
+});
+
+// Обработчик call-answer
+socket.on('call-answer', async (data) => {
+    try {
+        console.log('📥 Получен answer от:', data.from);
+        
+        if (peerConnection) {
+            await peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
+            
+            // Показываем модальное окно активного звонка
+            activeCallName.textContent = `Звонок с ${data.from}`;
+            activeCallModal.classList.add('active');
+            startCallTimer();
+        }
+    } catch (error) {
+        console.error('❌ Ошибка обработки answer:', error);
+    }
+});
+
+// Обработчик ice-candidate
+socket.on('ice-candidate', async (data) => {
+    try {
+        if (peerConnection && data.candidate) {
+            await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
+        }
+    } catch (error) {
+        console.error('❌ Ошибка добавления ICE candidate:', error);
+    }
+});
+
+// Обработчик завершения звонка
+socket.on('call-ended', (data) => {
+    console.log('📞 Звонок завершён:', data.from);
+    endCall();
+    alert(`${data.from} завершил звонок`);
+});
+
+// Функция для отсчёта времени звонка
+function startCallTimer() {
+    callStartTime = Date.now();
+    callDurationInterval = setInterval(() => {
+        const duration = Math.floor((Date.now() - callStartTime) / 1000);
+        const minutes = Math.floor(duration / 60);
+        const seconds = duration % 60;
+        activeCallDuration.textContent = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+    }, 1000);
+}

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'rodnya-v16.2';
+const CACHE_NAME = 'rodnya-v18.0';
 const urlsToCache = [
   '/',
   '/index.html',

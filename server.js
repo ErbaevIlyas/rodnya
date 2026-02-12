@@ -828,7 +828,7 @@ io.on('connection', (socket) => {
         }
     });
     
-    // Инициирование видеозвонка
+    // Инициирование звонка
     socket.on('initiate-call', (data) => {
         try {
             const { from, to } = data;
@@ -862,8 +862,33 @@ io.on('connection', (socket) => {
         }
     });
     
+    // Принятие звонка
+    socket.on('call-accepted', (data) => {
+        try {
+            const { from, to } = data;
+            console.log(`✅ Звонок принят: ${from} принял звонок от ${to}`);
+            
+            // Ищем сокет инициатора
+            let initiatorSocketId = null;
+            for (const [socketId, user] of connectedUsers.entries()) {
+                if (user.username === to) {
+                    initiatorSocketId = socketId;
+                    break;
+                }
+            }
+            
+            if (initiatorSocketId) {
+                io.to(initiatorSocketId).emit('call-accepted', {
+                    from: from
+                });
+            }
+        } catch (error) {
+            console.error('❌ Ошибка принятия звонка:', error);
+        }
+    });
+    
     // Отклонение звонка
-    socket.on('reject-call', (data) => {
+    socket.on('call-rejected', (data) => {
         try {
             const { from, to } = data;
             console.log(`❌ Звонок отклонён: ${from} отклонил звонок от ${to}`);
@@ -983,3 +1008,5 @@ process.on('SIGINT', () => {
     pool.end();
     process.exit(0);
 });
+
+
