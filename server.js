@@ -886,6 +886,80 @@ io.on('connection', (socket) => {
             console.error('❌ Ошибка отклонения звонка:', error);
         }
     });
+    
+    // WebRTC сигналы
+    socket.on('call-offer', (data) => {
+        try {
+            const { from, offer } = data;
+            console.log(`📤 Offer получен от ${from}`);
+            
+            // Ищем сокет получателя
+            let recipientSocketId = null;
+            for (const [socketId, user] of connectedUsers.entries()) {
+                if (user.username === data.to) {
+                    recipientSocketId = socketId;
+                    break;
+                }
+            }
+            
+            if (recipientSocketId) {
+                io.to(recipientSocketId).emit('call-offer', {
+                    from: from,
+                    offer: offer
+                });
+            }
+        } catch (error) {
+            console.error('❌ Ошибка передачи offer:', error);
+        }
+    });
+    
+    socket.on('call-answer', (data) => {
+        try {
+            const { from, answer } = data;
+            console.log(`📥 Answer получен от ${from}`);
+            
+            // Ищем сокет инициатора
+            let initiatorSocketId = null;
+            for (const [socketId, user] of connectedUsers.entries()) {
+                if (user.username === data.to) {
+                    initiatorSocketId = socketId;
+                    break;
+                }
+            }
+            
+            if (initiatorSocketId) {
+                io.to(initiatorSocketId).emit('call-answer', {
+                    from: from,
+                    answer: answer
+                });
+            }
+        } catch (error) {
+            console.error('❌ Ошибка передачи answer:', error);
+        }
+    });
+    
+    socket.on('ice-candidate', (data) => {
+        try {
+            const { to, candidate } = data;
+            
+            // Ищем сокет получателя
+            let recipientSocketId = null;
+            for (const [socketId, user] of connectedUsers.entries()) {
+                if (user.username === to) {
+                    recipientSocketId = socketId;
+                    break;
+                }
+            }
+            
+            if (recipientSocketId) {
+                io.to(recipientSocketId).emit('ice-candidate', {
+                    candidate: candidate
+                });
+            }
+        } catch (error) {
+            console.error('❌ Ошибка передачи ICE candidate:', error);
+        }
+    });
 });
 
 const PORT = process.env.PORT || 3000;

@@ -1818,104 +1818,126 @@ function startVideoCall(username) {
     const roomId = [currentUsername, username].sort().join('-');
     
     // Очищаем контейнер
-    callContainer.innerHTML = '<div id="jitsi-container"></div>';
-    
-    // Загружаем Jitsi Meet
-    const script = document.createElement('script');
-    script.src = 'https://meet.jit.si/external_api.js';
-    script.onload = () => {
-        initJitsiMeet(roomId, username);
-    };
-    document.head.appendChild(script);
+    callContainer.innerHTML = `
+        <div style="width: 100%; height: 100%; display: flex; flex-direction: column; background: #000;">
+            <div style="flex: 1; display: flex; gap: 10px; padding: 10px; overflow: hidden;">
+                <video id="local-video" autoplay muted playsinline style="flex: 1; background: #000; border-radius: 8px; max-width: 50%;"></video>
+                <video id="remote-video" autoplay playsinline style="flex: 1; background: #000; border-radius: 8px; max-width: 50%;"></video>
+            </div>
+            <div style="padding: 16px; background: rgba(0,0,0,0.5); display: flex; gap: 12px; justify-content: center;">
+                <button id="toggle-audio-btn" style="width: 50px; height: 50px; border-radius: 50%; background: #667eea; color: white; border: none; font-size: 20px; cursor: pointer;">
+                    <i class="fas fa-microphone"></i>
+                </button>
+                <button id="toggle-video-btn" style="width: 50px; height: 50px; border-radius: 50%; background: #667eea; color: white; border: none; font-size: 20px; cursor: pointer;">
+                    <i class="fas fa-video"></i>
+                </button>
+                <button id="end-call-btn" style="width: 50px; height: 50px; border-radius: 50%; background: #ff4757; color: white; border: none; font-size: 20px; cursor: pointer;">
+                    <i class="fas fa-phone"></i>
+                </button>
+            </div>
+        </div>
+    `;
     
     // Показываем модальное окно
     callModal.classList.add('active');
+    
+    // Инициализируем WebRTC
+    initWebRTC(username, roomId);
 }
 
-// Инициализация Jitsi Meet
-function initJitsiMeet(roomId, otherUsername) {
-    console.log('🔧 Инициализация Jitsi Meet для комнаты:', roomId);
-    
-    const options = {
-        roomName: roomId,
-        width: '100%',
-        height: '100%',
-        parentNode: document.querySelector('#jitsi-container'),
-        configOverwrite: {
-            startWithAudioMuted: false,
-            startWithVideoMuted: false,
-            disableSimulcast: false,
-            enableLayerSuspension: true,
-            constraints: {
-                video: {
-                    height: {
-                        ideal: 720,
-                        max: 720,
-                        min: 240
-                    }
-                }
-            },
-            enableWelcomePage: false,
-            requireDisplayName: false
-        },
-        interfaceConfigOverwrite: {
-            DEFAULT_LANGUAGE: 'ru',
-            SHOW_JITSI_WATERMARK: false,
-            SHOW_WATERMARK_FOR_GUESTS: false,
-            MOBILE_APP_PROMO: false,
-            SHOW_PROMOTIONAL_CLOSE_PAGE: false,
-            AUTHENTICATION_ENABLE: false,
-            SHOW_CHROME_EXTENSION_BANNER: false,
-            TOOLBAR_BUTTONS: [
-                'microphone',
-                'camera',
-                'closedcaptions',
-                'desktop',
-                'fullscreen',
-                'fodeviceselection',
-                'hangup',
-                'chat',
-                'settings',
-                'raisehand',
-                'videoquality',
-                'filmstrip',
-                'stats',
-                'shortcuts',
-                'tileview',
-                'select-background',
-                'download'
-            ],
-            LANG_DETECTION: true,
-            HIDE_INVITE_MORE_HEADER: true,
-            DISABLE_FOCUS_INDICATOR: false,
-            DISABLE_DOMINANT_SPEAKER_INDICATOR: false,
-            DISABLE_TRANSCRIPTION_SUBTITLES: true,
-            DISABLE_RINGING: false,
-            ENABLE_NOISY_MIC_DETECTION: true
-        },
-        userInfo: {
-            displayName: currentUsername
-        }
-    };
-    
+// WebRTC переменные
+let localStream = null;
+let peerConnection = null;
+let dataChannel = null;
+
+// Инициализация WebRTC
+async function initWebRTC(username, roomId) {
     try {
-        window.jitsiApi = new window.JitsiMeetExternalAPI('meet.jit.si', options);
+        console.log('🔧 Инициализация WebRTC');
         
-        window.jitsiApi.addEventListener('videoConferenceJoined', () => {
-            console.log('✅ Присоединился к видеоконференции');
+        // Получаем доступ к камере и микрофону
+        localStream = await navigator.mediaDevices.getUserMedia({
+            video: { width: { ideal: 1280 }, height: { ideal: 720 } },
+            audio: true
         });
         
-        window.jitsiApi.addEventListener('videoConferenceLocked', () => {
-            console.log('🔒 Видеоконференция заблокирована');
+        const localVideo = document.getElementById('local-video');
+        localVideo.srcObject = localStream;
+        
+        console.log('✅ Камера и микрофон получены');
+        
+        // Создаём peer connection
+        const configuration = {
+            iceServers: [
+                { urls: ['stun:stun.l.google.com:19302'] },
+                { urls: ['stun:stun1.l.google.com:19302'] }
+            ]
+        };
+        
+        peerConnection = new RTCPeerConnection(configuration);
+        
+        // Добавляем локальный поток
+        localStream.getTracks().forEach(track => {
+            peerConnection.addTrack(track, localStream);
         });
         
-        window.jitsiApi.addEventListener('readyToClose', () => {
-            console.log('👋 Видеоконференция закрыта');
+        // Обработчик удалённого потока
+        peerConnection.ontrack = (event) => {
+            console.log('📹 Получен удалённый поток');
+            const remoteVideo = document.getElementById('remote-video');
+            if (remoteVideo) {
+                remoteVideo.srcObject = event.streams[0];
+            }
+        };
+        
+        // Обработчик ICE кандидатов
+        peerConnection.onicecandidate = (event) => {
+            if (event.candidate) {
+                socket.emit('ice-candidate', {
+                    to: username,
+                    candidate: event.candidate
+                });
+            }
+        };
+        
+        // Создаём offer
+        const offer = await peerConnection.createOffer();
+        await peerConnection.setLocalDescription(offer);
+        
+        // Отправляем offer
+        socket.emit('call-offer', {
+            to: username,
+            offer: offer
+        });
+        
+        console.log('� Offer отправлен');
+        
+        // Обработчики кнопок
+        document.getElementById('toggle-audio-btn').addEventListener('click', () => {
+            const audioTracks = localStream.getAudioTracks();
+            audioTracks.forEach(track => {
+                track.enabled = !track.enabled;
+                const btn = document.getElementById('toggle-audio-btn');
+                btn.style.background = track.enabled ? '#667eea' : '#ff4757';
+            });
+        });
+        
+        document.getElementById('toggle-video-btn').addEventListener('click', () => {
+            const videoTracks = localStream.getVideoTracks();
+            videoTracks.forEach(track => {
+                track.enabled = !track.enabled;
+                const btn = document.getElementById('toggle-video-btn');
+                btn.style.background = track.enabled ? '#667eea' : '#ff4757';
+            });
+        });
+        
+        document.getElementById('end-call-btn').addEventListener('click', () => {
             endVideoCall();
         });
+        
     } catch (error) {
-        console.error('❌ Ошибка инициализации Jitsi:', error);
-        alert('Ошибка при подключении к видеозвонку');
+        console.error('❌ Ошибка WebRTC:', error);
+        alert('Ошибка при подключении камеры: ' + error.message);
         endVideoCall();
     }
 }
@@ -1924,9 +1946,16 @@ function initJitsiMeet(roomId, otherUsername) {
 function endVideoCall() {
     console.log('📞 Завершение видеозвонка');
     
-    if (window.jitsiApi) {
-        window.jitsiApi.dispose();
-        window.jitsiApi = null;
+    // Останавливаем локальный поток
+    if (localStream) {
+        localStream.getTracks().forEach(track => track.stop());
+        localStream = null;
+    }
+    
+    // Закрываем peer connection
+    if (peerConnection) {
+        peerConnection.close();
+        peerConnection = null;
     }
     
     callContainer.innerHTML = '';
@@ -1954,4 +1983,122 @@ socket.on('call-rejected', (data) => {
     console.log('❌ Звонок отклонён:', data.from);
     alert(`${data.from} отклонил звонок`);
     endVideoCall();
+});
+
+
+// Обработчик call-offer
+socket.on('call-offer', async (data) => {
+    try {
+        console.log('📤 Получен offer от:', data.from);
+        
+        const configuration = {
+            iceServers: [
+                { urls: ['stun:stun.l.google.com:19302'] },
+                { urls: ['stun:stun1.l.google.com:19302'] }
+            ]
+        };
+        
+        peerConnection = new RTCPeerConnection(configuration);
+        
+        // Получаем доступ к камере и микрофону
+        localStream = await navigator.mediaDevices.getUserMedia({
+            video: { width: { ideal: 1280 }, height: { ideal: 720 } },
+            audio: true
+        });
+        
+        const localVideo = document.getElementById('local-video');
+        if (localVideo) {
+            localVideo.srcObject = localStream;
+        }
+        
+        // Добавляем локальный поток
+        localStream.getTracks().forEach(track => {
+            peerConnection.addTrack(track, localStream);
+        });
+        
+        // Обработчик удалённого потока
+        peerConnection.ontrack = (event) => {
+            console.log('📹 Получен удалённый поток');
+            const remoteVideo = document.getElementById('remote-video');
+            if (remoteVideo) {
+                remoteVideo.srcObject = event.streams[0];
+            }
+        };
+        
+        // Обработчик ICE кандидатов
+        peerConnection.onicecandidate = (event) => {
+            if (event.candidate) {
+                socket.emit('ice-candidate', {
+                    to: data.from,
+                    candidate: event.candidate
+                });
+            }
+        };
+        
+        // Устанавливаем remote description
+        await peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
+        
+        // Создаём answer
+        const answer = await peerConnection.createAnswer();
+        await peerConnection.setLocalDescription(answer);
+        
+        // Отправляем answer
+        socket.emit('call-answer', {
+            to: data.from,
+            answer: answer
+        });
+        
+        console.log('📥 Answer отправлен');
+        
+        // Обработчики кнопок
+        document.getElementById('toggle-audio-btn').addEventListener('click', () => {
+            const audioTracks = localStream.getAudioTracks();
+            audioTracks.forEach(track => {
+                track.enabled = !track.enabled;
+                const btn = document.getElementById('toggle-audio-btn');
+                btn.style.background = track.enabled ? '#667eea' : '#ff4757';
+            });
+        });
+        
+        document.getElementById('toggle-video-btn').addEventListener('click', () => {
+            const videoTracks = localStream.getVideoTracks();
+            videoTracks.forEach(track => {
+                track.enabled = !track.enabled;
+                const btn = document.getElementById('toggle-video-btn');
+                btn.style.background = track.enabled ? '#667eea' : '#ff4757';
+            });
+        });
+        
+        document.getElementById('end-call-btn').addEventListener('click', () => {
+            endVideoCall();
+        });
+        
+    } catch (error) {
+        console.error('❌ Ошибка обработки offer:', error);
+    }
+});
+
+// Обработчик call-answer
+socket.on('call-answer', async (data) => {
+    try {
+        console.log('📥 Получен answer от:', data.from);
+        
+        if (peerConnection) {
+            await peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
+            console.log('✅ Remote description установлен');
+        }
+    } catch (error) {
+        console.error('❌ Ошибка обработки answer:', error);
+    }
+});
+
+// Обработчик ice-candidate
+socket.on('ice-candidate', async (data) => {
+    try {
+        if (peerConnection && data.candidate) {
+            await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
+        }
+    } catch (error) {
+        console.error('❌ Ошибка добавления ICE candidate:', error);
+    }
 });
