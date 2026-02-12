@@ -1854,7 +1854,9 @@ function initJitsiMeet(roomId, otherUsername) {
                         min: 240
                     }
                 }
-            }
+            },
+            enableWelcomePage: false,
+            requireDisplayName: false
         },
         interfaceConfigOverwrite: {
             DEFAULT_LANGUAGE: 'ru',
@@ -1862,6 +1864,8 @@ function initJitsiMeet(roomId, otherUsername) {
             SHOW_WATERMARK_FOR_GUESTS: false,
             MOBILE_APP_PROMO: false,
             SHOW_PROMOTIONAL_CLOSE_PAGE: false,
+            AUTHENTICATION_ENABLE: false,
+            SHOW_CHROME_EXTENSION_BANNER: false,
             TOOLBAR_BUTTONS: [
                 'microphone',
                 'camera',
@@ -1882,8 +1886,12 @@ function initJitsiMeet(roomId, otherUsername) {
                 'download'
             ],
             LANG_DETECTION: true,
-            AUTHENTICATION_ENABLE: false,
-            SHOW_CHROME_EXTENSION_BANNER: false
+            HIDE_INVITE_MORE_HEADER: true,
+            DISABLE_FOCUS_INDICATOR: false,
+            DISABLE_DOMINANT_SPEAKER_INDICATOR: false,
+            DISABLE_TRANSCRIPTION_SUBTITLES: true,
+            DISABLE_RINGING: false,
+            ENABLE_NOISY_MIC_DETECTION: true
         },
         userInfo: {
             displayName: currentUsername
