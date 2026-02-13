@@ -292,7 +292,11 @@ function sendPushNotification(subscription, data) {
             body: data.body,
             icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y="75" font-size="75">👥</text></svg>',
             badge: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y="75" font-size="75">👥</text></svg>',
-            tag: data.tag || 'rodnya-notification'
+            tag: data.tag || 'rodnya-notification',
+            requireInteraction: data.requireInteraction || false,
+            callId: data.callId,
+            caller: data.caller,
+            isCall: data.isCall || false
         });
         
         webpush.sendNotification(subscription, payload)
@@ -525,6 +529,26 @@ io.on('connection', (socket) => {
             };
             
             io.to('general').emit('new-message', formattedMessage);
+            
+            // Отправляем push-уведомления всем подписанным пользователям кроме отправителя
+            try {
+                const subResult = await pool.query(
+                    'SELECT username, subscription FROM push_subscriptions WHERE username != $1',
+                    [username]
+                );
+                
+                subResult.rows.forEach(row => {
+                    sendPushNotification(JSON.parse(row.subscription), {
+                        title: `💬 Сообщение в общем чате от ${username}`,
+                        body: data.message.substring(0, 100),
+                        tag: `general-message-${username}`,
+                        isMessage: true,
+                        requireInteraction: false
+                    });
+                });
+            } catch (pushError) {
+                console.log(`⚠️ Ошибка отправки push для общего чата:`, pushError.message);
+            }
         } catch (error) {
             console.error('Ошибка отправки сообщения:', error);
         }
@@ -556,6 +580,30 @@ io.on('connection', (socket) => {
             };
             
             io.to('general').emit('new-message', formattedMessage);
+            
+            // Отправляем push-уведомления всем подписанным пользователям кроме отправителя
+            try {
+                const subResult = await pool.query(
+                    'SELECT username, subscription FROM push_subscriptions WHERE username != $1',
+                    [username]
+                );
+                
+                const fileType = data.mimetype.startsWith('image/') ? '📸' : 
+                                data.mimetype.startsWith('video/') ? '🎥' :
+                                data.mimetype.startsWith('audio/') ? '🎵' : '📎';
+                
+                subResult.rows.forEach(row => {
+                    sendPushNotification(JSON.parse(row.subscription), {
+                        title: `${fileType} Файл в общем чате от ${username}`,
+                        body: data.originalname.substring(0, 100),
+                        tag: `general-file-${username}`,
+                        isMessage: true,
+                        requireInteraction: false
+                    });
+                });
+            } catch (pushError) {
+                console.log(`⚠️ Ошибка отправки push для файла в общем чате:`, pushError.message);
+            }
         } catch (error) {
             console.error('Ошибка отправки файла:', error);
         }
@@ -613,6 +661,28 @@ io.on('connection', (socket) => {
                 // Пользователь онлайн - отправляем через socket
                 console.log(`✅ ${recipientUsername} онлайн, отправляем через socket`);
                 io.to(recipientSocketId).emit('private-message', formattedMessage);
+                
+                // Также отправляем push-уведомление если есть подписка
+                try {
+                    const subResult = await pool.query(
+                        'SELECT subscription FROM push_subscriptions WHERE username = $1',
+                        [recipientUsername]
+                    );
+                    
+                    if (subResult.rows.length > 0) {
+                        const subscription = subResult.rows[0].subscription;
+                        console.log(`📢 Отправляем push для ${recipientUsername}`);
+                        sendPushNotification(subscription, {
+                            title: `💬 Сообщение от ${senderUsername}`,
+                            body: message.substring(0, 100),
+                            tag: `message-${senderUsername}`,
+                            isMessage: true,
+                            requireInteraction: false
+                        });
+                    }
+                } catch (pushError) {
+                    console.log(`⚠️ Ошибка отправки push для онлайн пользователя:`, pushError.message);
+                }
             } else {
                 // Пользователь офлайн - ищем подписку в БД
                 console.log(`⚠️ ${recipientUsername} офлайн, ищем подписку в БД...`);
@@ -627,9 +697,11 @@ io.on('connection', (socket) => {
                         const subscription = subResult.rows[0].subscription;
                         console.log(`📢 Отправляем push для ${recipientUsername}`);
                         sendPushNotification(subscription, {
-                            title: `Сообщение от ${senderUsername}`,
+                            title: `💬 Сообщение от ${senderUsername}`,
                             body: message.substring(0, 100),
-                            tag: `message-${senderUsername}`
+                            tag: `message-${senderUsername}`,
+                            isMessage: true,
+                            requireInteraction: false
                         });
                     } else {
                         console.log(`❌ Подписка не найдена в БД для ${recipientUsername}`);
@@ -683,6 +755,56 @@ io.on('connection', (socket) => {
             
             if (recipientSocketId) {
                 io.to(recipientSocketId).emit('private-message', formattedMessage);
+                
+                // Также отправляем push-уведомление если есть подписка
+                try {
+                    const subResult = await pool.query(
+                        'SELECT subscription FROM push_subscriptions WHERE username = $1',
+                        [recipientUsername]
+                    );
+                    
+                    if (subResult.rows.length > 0) {
+                        const subscription = subResult.rows[0].subscription;
+                        const fileType = mimetype.startsWith('image/') ? '📸' : 
+                                        mimetype.startsWith('video/') ? '🎥' :
+                                        mimetype.startsWith('audio/') ? '🎵' : '📎';
+                        
+                        sendPushNotification(subscription, {
+                            title: `${fileType} Файл от ${senderUsername}`,
+                            body: originalname.substring(0, 100),
+                            tag: `file-${senderUsername}`,
+                            isMessage: true,
+                            requireInteraction: false
+                        });
+                    }
+                } catch (pushError) {
+                    console.log(`⚠️ Ошибка отправки push для файла:`, pushError.message);
+                }
+            } else {
+                // Пользователь офлайн - отправляем push
+                try {
+                    const subResult = await pool.query(
+                        'SELECT subscription FROM push_subscriptions WHERE username = $1',
+                        [recipientUsername]
+                    );
+                    
+                    if (subResult.rows.length > 0) {
+                        const subscription = subResult.rows[0].subscription;
+                        const fileType = mimetype.startsWith('image/') ? '📸' : 
+                                        mimetype.startsWith('video/') ? '🎥' :
+                                        mimetype.startsWith('audio/') ? '🎵' : '📎';
+                        
+                        sendPushNotification(subscription, {
+                            title: `${fileType} Файл от ${senderUsername}`,
+                            body: originalname.substring(0, 100),
+                            tag: `file-${senderUsername}`,
+                            isMessage: true,
+                            requireInteraction: false
+                        });
+                    }
+                } catch (pushError) {
+                    console.log(`⚠️ Ошибка отправки push для офлайн пользователя:`, pushError.message);
+                }
             }
         } catch (error) {
             console.error('Ошибка отправки приватного файла:', error);
@@ -872,9 +994,13 @@ io.on('connection', (socket) => {
                     if (subResult.rows.length > 0) {
                         const subscription = subResult.rows[0].subscription;
                         sendPushNotification(subscription, {
-                            title: `Звонок от ${caller}`,
+                            title: `📞 Звонок от ${caller}`,
                             body: 'Входящий звонок',
-                            tag: `call-${callId}`
+                            tag: `call-${callId}`,
+                            callId: callId,
+                            caller: caller,
+                            isCall: true,
+                            requireInteraction: true
                         });
                     }
                 } catch (dbError) {

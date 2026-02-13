@@ -413,6 +413,23 @@ async function subscribeToPushNotifications() {
         const registration = await navigator.serviceWorker.ready;
         console.log('✅ Service Worker готов');
         
+        // Обработка сообщений от Service Worker
+        if (navigator.serviceWorker.controller) {
+            navigator.serviceWorker.addEventListener('message', (event) => {
+                if (event.data.type === 'CALL_ACTION') {
+                    console.log(`📞 Действие со звонком: ${event.data.action}`);
+                    
+                    if (event.data.action === 'accept') {
+                        currentCallId = event.data.callId;
+                        currentCallUser = event.data.caller;
+                        socket.emit('accept-call', { callId: event.data.callId });
+                    } else if (event.data.action === 'reject') {
+                        socket.emit('reject-call', { callId: event.data.callId });
+                    }
+                }
+            });
+        }
+        
         // Проверяем есть ли уже подписка
         let subscription = await registration.pushManager.getSubscription();
         
@@ -1754,6 +1771,23 @@ function initiateCall(recipientUsername) {
     
     console.log(`📞 Инициируем звонок к ${recipientUsername}`);
     socket.emit('initiate-call', { recipientUsername: recipientUsername });
+}
+
+// Обработка сообщений от Service Worker
+if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.addEventListener('message', (event) => {
+        if (event.data.type === 'CALL_ACTION') {
+            console.log(`📞 Действие со звонком: ${event.data.action}`);
+            
+            if (event.data.action === 'accept') {
+                currentCallId = event.data.callId;
+                currentCallUser = event.data.caller;
+                socket.emit('accept-call', { callId: event.data.callId });
+            } else if (event.data.action === 'reject') {
+                socket.emit('reject-call', { callId: event.data.callId });
+            }
+        }
+    });
 }
 
 // Добавляем кнопку звонка в список пользователей
