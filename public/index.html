@@ -255,6 +255,53 @@
         </div>
     </div>
 
+    <!-- Модал входящего звонка -->
+    <div class="incoming-call-modal" id="incoming-call-modal">
+        <div class="incoming-call-content">
+            <div class="incoming-call-header">
+                <i class="fas fa-phone-alt"></i>
+                <h2>Входящий звонок</h2>
+            </div>
+            <div class="incoming-call-info">
+                <span id="incoming-caller-name" class="caller-name">Пользователь</span>
+                <span class="call-status">Звонит...</span>
+            </div>
+            <div class="incoming-call-buttons">
+                <button class="call-btn reject" id="reject-call-btn">
+                    <i class="fas fa-phone-slash"></i>
+                </button>
+                <button class="call-btn accept" id="accept-call-btn">
+                    <i class="fas fa-phone"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модал активного звонка -->
+    <div class="active-call-modal" id="active-call-modal">
+        <div class="active-call-content">
+            <div class="active-call-header">
+                <span id="active-call-user" class="call-user">Пользователь</span>
+                <span id="call-duration" class="call-duration">00:00</span>
+            </div>
+            <div class="active-call-video-container" id="active-call-video-container">
+                <video id="local-video" autoplay muted playsinline></video>
+                <video id="remote-video" autoplay playsinline></video>
+            </div>
+            <div class="active-call-controls">
+                <button class="call-control-btn" id="toggle-audio-btn" title="Отключить микрофон">
+                    <i class="fas fa-microphone"></i>
+                </button>
+                <button class="call-control-btn" id="toggle-video-btn" title="Отключить камеру">
+                    <i class="fas fa-video"></i>
+                </button>
+                <button class="call-control-btn end-call" id="end-call-btn" title="Завершить звонок">
+                    <i class="fas fa-phone-slash"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
     <script src="/socket.io/socket.io.js"></script>
     <script src="script.js?v=15.1"></script>
     <script>

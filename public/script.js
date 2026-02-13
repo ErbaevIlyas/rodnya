@@ -590,65 +590,6 @@ toggleSidebarBtn.addEventListener('click', () => {
     sidebar.classList.toggle('active');
 });
 
-// Обновление списка пользователей
-function updateUsersList() {
-    usersList.innerHTML = '';
-    
-    allUsers.forEach(user => {
-        const username = typeof user === 'string' ? user : user.username;
-        if (username === currentUsername) return;
-        
-        const userItem = document.createElement('div');
-        userItem.className = 'user-item';
-        if (username === currentChatUser) userItem.classList.add('active');
-        
-        // Аватарка
-        const avatarUrl = typeof user === 'string' ? null : user.avatar_url;
-        let avatarElement;
-        if (avatarUrl) {
-            avatarElement = document.createElement('img');
-            avatarElement.src = avatarUrl;
-            avatarElement.alt = username;
-            avatarElement.className = 'user-list-avatar';
-        } else {
-            avatarElement = document.createElement('div');
-            avatarElement.className = 'user-list-avatar-placeholder';
-            avatarElement.textContent = username.substring(0, 1).toUpperCase();
-        }
-        
-        const statusDot = document.createElement('div');
-        statusDot.className = 'user-status';
-        
-        const isOnline = typeof user === 'string' ? onlineUsers.includes(user) : user.isOnline;
-        statusDot.style.background = isOnline ? '#4caf50' : '#ccc';
-        statusDot.title = isOnline ? 'Онлайн' : 'Офлайн';
-        
-        const userName = document.createElement('span');
-        userName.textContent = username;
-        
-        userItem.appendChild(avatarElement);
-        userItem.appendChild(statusDot);
-        userItem.appendChild(userName);
-        
-        if (unreadMessages[username] && unreadMessages[username] > 0) {
-            const badge = document.createElement('div');
-            badge.className = 'unread-badge';
-            badge.textContent = unreadMessages[username];
-            userItem.appendChild(badge);
-        }
-        
-        userItem.addEventListener('click', () => {
-            openPrivateChat(username);
-            const sidebar = document.querySelector('.sidebar');
-            if (window.innerWidth <= 768) {
-                sidebar.classList.remove('active');
-            }
-        });
-        
-        usersList.appendChild(userItem);
-    });
-}
-
 // Открытие приватного чата
 function openPrivateChat(username) {
     currentChatUser = username;
@@ -1771,4 +1712,416 @@ saveEditorBtn.addEventListener('click', async () => {
             alert('Ошибка сохранения аватарки: ' + error.message);
         }
     }, 'image/png');
+});
+
+
+// ===== ЗВОНКИ =====
+const incomingCallModal = document.getElementById('incoming-call-modal');
+const activeCallModal = document.getElementById('active-call-modal');
+const incomingCallerName = document.getElementById('incoming-caller-name');
+const acceptCallBtn = document.getElementById('accept-call-btn');
+const rejectCallBtn = document.getElementById('reject-call-btn');
+const endCallBtn = document.getElementById('end-call-btn');
+const toggleAudioBtn = document.getElementById('toggle-audio-btn');
+const toggleVideoBtn = document.getElementById('toggle-video-btn');
+const localVideo = document.getElementById('local-video');
+const remoteVideo = document.getElementById('remote-video');
+const activeCallUser = document.getElementById('active-call-user');
+const callDuration = document.getElementById('call-duration');
+
+let currentCallId = null;
+let currentCallUser = null;
+let peerConnection = null;
+let localStream = null;
+let remoteStream = null;
+let callStartTime = null;
+let callDurationInterval = null;
+let audioEnabled = true;
+let videoEnabled = true;
+
+// STUN серверы для NAT traversal
+const iceServers = [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+    { urls: 'stun:stun2.l.google.com:19302' },
+    { urls: 'stun:stun3.l.google.com:19302' },
+    { urls: 'stun:stun4.l.google.com:19302' }
+];
+
+// Инициирование звонка
+function initiateCall(recipientUsername) {
+    if (!currentUsername) return;
+    
+    console.log(`📞 Инициируем звонок к ${recipientUsername}`);
+    socket.emit('initiate-call', { recipientUsername: recipientUsername });
+}
+
+// Добавляем кнопку звонка в список пользователей
+function updateUsersList() {
+    usersList.innerHTML = '';
+    
+    allUsers.forEach(user => {
+        const username = typeof user === 'string' ? user : user.username;
+        if (username === currentUsername) return;
+        
+        const userItem = document.createElement('div');
+        userItem.className = 'user-item';
+        if (username === currentChatUser) userItem.classList.add('active');
+        
+        // Аватарка
+        const avatarUrl = typeof user === 'string' ? null : user.avatar_url;
+        let avatarElement;
+        if (avatarUrl) {
+            avatarElement = document.createElement('img');
+            avatarElement.src = avatarUrl;
+            avatarElement.alt = username;
+            avatarElement.className = 'user-list-avatar';
+        } else {
+            avatarElement = document.createElement('div');
+            avatarElement.className = 'user-list-avatar-placeholder';
+            avatarElement.textContent = username.substring(0, 1).toUpperCase();
+        }
+        
+        const statusDot = document.createElement('div');
+        statusDot.className = 'user-status';
+        
+        const isOnline = typeof user === 'string' ? onlineUsers.includes(user) : user.isOnline;
+        statusDot.style.background = isOnline ? '#4caf50' : '#ccc';
+        statusDot.title = isOnline ? 'Онлайн' : 'Офлайн';
+        
+        const userName = document.createElement('span');
+        userName.textContent = username;
+        
+        userItem.appendChild(avatarElement);
+        userItem.appendChild(statusDot);
+        userItem.appendChild(userName);
+        
+        // Кнопка звонка
+        if (isOnline) {
+            const callBtn = document.createElement('button');
+            callBtn.className = 'user-call-btn';
+            callBtn.innerHTML = '<i class="fas fa-phone"></i>';
+            callBtn.title = 'Позвонить';
+            callBtn.onclick = (e) => {
+                e.stopPropagation();
+                initiateCall(username);
+            };
+            userItem.appendChild(callBtn);
+        }
+        
+        if (unreadMessages[username] && unreadMessages[username] > 0) {
+            const badge = document.createElement('div');
+            badge.className = 'unread-badge';
+            badge.textContent = unreadMessages[username];
+            userItem.appendChild(badge);
+        }
+        
+        userItem.addEventListener('click', () => {
+            openPrivateChat(username);
+            const sidebar = document.querySelector('.sidebar');
+            if (window.innerWidth <= 768) {
+                sidebar.classList.remove('active');
+            }
+        });
+        
+        usersList.appendChild(userItem);
+    });
+}
+
+// Socket события - Звонки
+socket.on('call-initiated', (data) => {
+    console.log(`✅ Звонок инициирован. ID: ${data.callId}`);
+    currentCallId = data.callId;
+    currentCallUser = data.recipient;
+});
+
+socket.on('incoming-call', async (data) => {
+    console.log(`📞 Входящий звонок от ${data.caller}`);
+    currentCallId = data.callId;
+    currentCallUser = data.caller;
+    
+    incomingCallerName.textContent = data.caller;
+    incomingCallModal.classList.add('active');
+    
+    // Звуковое уведомление
+    try {
+        playNotificationSound();
+    } catch (e) {
+        console.log('Ошибка звука:', e);
+    }
+});
+
+socket.on('call-accepted', async (data) => {
+    console.log(`✅ Звонок принят ${data.recipient}`);
+    incomingCallModal.classList.remove('active');
+    
+    // Инициируем WebRTC соединение
+    await startCall(data.recipient, true);
+});
+
+socket.on('call-accepted-confirmed', async (data) => {
+    console.log(`✅ Подтверждение принятия звонка`);
+    incomingCallModal.classList.remove('active');
+    
+    // Инициируем WebRTC соединение
+    await startCall(currentCallUser, false);
+});
+
+socket.on('call-rejected', (data) => {
+    console.log(`❌ Звонок отклонен`);
+    currentCallId = null;
+    currentCallUser = null;
+    alert('Звонок отклонен');
+});
+
+socket.on('call-ended', (data) => {
+    console.log(`📞 Звонок завершен. Длительность: ${data.duration}с`);
+    endCall();
+});
+
+socket.on('webrtc-offer', async (data) => {
+    console.log(`📡 Получен WebRTC offer`);
+    if (!peerConnection) {
+        await createPeerConnection();
+    }
+    
+    try {
+        await peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
+        const answer = await peerConnection.createAnswer();
+        await peerConnection.setLocalDescription(answer);
+        
+        socket.emit('webrtc-answer', {
+            callId: data.callId,
+            answer: answer,
+            callerUsername: data.callerUsername
+        });
+    } catch (error) {
+        console.error('❌ Ошибка обработки offer:', error);
+    }
+});
+
+socket.on('webrtc-answer', async (data) => {
+    console.log(`📡 Получен WebRTC answer`);
+    try {
+        await peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
+    } catch (error) {
+        console.error('❌ Ошибка обработки answer:', error);
+    }
+});
+
+socket.on('webrtc-ice-candidate', async (data) => {
+    try {
+        if (data.candidate) {
+            await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
+        }
+    } catch (error) {
+        console.error('❌ Ошибка добавления ICE candidate:', error);
+    }
+});
+
+// Создание WebRTC соединения
+async function createPeerConnection() {
+    try {
+        peerConnection = new RTCPeerConnection({
+            iceServers: iceServers
+        });
+        
+        // Обработка локального потока
+        peerConnection.ontrack = (event) => {
+            console.log('📹 Получен удаленный поток');
+            remoteStream = event.streams[0];
+            remoteVideo.srcObject = remoteStream;
+        };
+        
+        // Обработка ICE candidates
+        peerConnection.onicecandidate = (event) => {
+            if (event.candidate) {
+                socket.emit('webrtc-ice-candidate', {
+                    callId: currentCallId,
+                    candidate: event.candidate,
+                    targetUsername: currentCallUser
+                });
+            }
+        };
+        
+        // Обработка изменения состояния соединения
+        peerConnection.onconnectionstatechange = () => {
+            console.log(`🔗 Состояние соединения: ${peerConnection.connectionState}`);
+            if (peerConnection.connectionState === 'failed' || peerConnection.connectionState === 'disconnected') {
+                endCall();
+            }
+        };
+        
+        // Добавляем локальный поток
+        if (localStream) {
+            localStream.getTracks().forEach(track => {
+                peerConnection.addTrack(track, localStream);
+            });
+        }
+        
+    } catch (error) {
+        console.error('❌ Ошибка создания PeerConnection:', error);
+    }
+}
+
+// Начало звонка
+async function startCall(recipientUsername, isInitiator) {
+    try {
+        console.log(`🎤 Начинаем звонок с ${recipientUsername}`);
+        
+        // Получаем доступ к микрофону и камере
+        localStream = await navigator.mediaDevices.getUserMedia({
+            audio: {
+                echoCancellation: true,
+                noiseSuppression: true,
+                autoGainControl: true
+            },
+            video: {
+                width: { ideal: 1280 },
+                height: { ideal: 720 }
+            }
+        });
+        
+        localVideo.srcObject = localStream;
+        
+        // Создаем WebRTC соединение
+        await createPeerConnection();
+        
+        // Если мы инициатор, создаем offer
+        if (isInitiator) {
+            const offer = await peerConnection.createOffer();
+            await peerConnection.setLocalDescription(offer);
+            
+            socket.emit('webrtc-offer', {
+                callId: currentCallId,
+                offer: offer,
+                recipientUsername: recipientUsername
+            });
+        }
+        
+        // Показываем модал активного звонка
+        activeCallUser.textContent = recipientUsername;
+        activeCallModal.classList.add('active');
+        
+        // Запускаем таймер длительности
+        callStartTime = Date.now();
+        callDurationInterval = setInterval(updateCallDuration, 1000);
+        
+    } catch (error) {
+        console.error('❌ Ошибка начала звонка:', error);
+        alert('Ошибка доступа к микрофону/камере: ' + error.message);
+        endCall();
+    }
+}
+
+// Обновление длительности звонка
+function updateCallDuration() {
+    if (callStartTime) {
+        const duration = Math.floor((Date.now() - callStartTime) / 1000);
+        const minutes = Math.floor(duration / 60);
+        const seconds = duration % 60;
+        callDuration.textContent = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+    }
+}
+
+// Завершение звонка
+function endCall() {
+    console.log('📞 Завершаем звонок');
+    
+    // Отправляем событие завершения
+    if (currentCallId) {
+        const duration = callStartTime ? Math.floor((Date.now() - callStartTime) / 1000) : 0;
+        socket.emit('end-call', {
+            callId: currentCallId,
+            duration: duration
+        });
+    }
+    
+    // Закрываем модалы
+    activeCallModal.classList.remove('active');
+    incomingCallModal.classList.remove('active');
+    
+    // Останавливаем таймер
+    if (callDurationInterval) {
+        clearInterval(callDurationInterval);
+        callDurationInterval = null;
+    }
+    
+    // Закрываем потоки
+    if (localStream) {
+        localStream.getTracks().forEach(track => track.stop());
+        localStream = null;
+    }
+    
+    if (remoteStream) {
+        remoteStream.getTracks().forEach(track => track.stop());
+        remoteStream = null;
+    }
+    
+    // Закрываем WebRTC соединение
+    if (peerConnection) {
+        peerConnection.close();
+        peerConnection = null;
+    }
+    
+    currentCallId = null;
+    currentCallUser = null;
+    audioEnabled = true;
+    videoEnabled = true;
+    
+    // Обновляем кнопки
+    toggleAudioBtn.innerHTML = '<i class="fas fa-microphone"></i>';
+    toggleVideoBtn.innerHTML = '<i class="fas fa-video"></i>';
+}
+
+// Обработчики кнопок звонка
+acceptCallBtn.addEventListener('click', () => {
+    console.log(`✅ Принимаем звонок`);
+    socket.emit('accept-call', { callId: currentCallId });
+});
+
+rejectCallBtn.addEventListener('click', () => {
+    console.log(`❌ Отклоняем звонок`);
+    socket.emit('reject-call', { callId: currentCallId });
+    incomingCallModal.classList.remove('active');
+    currentCallId = null;
+    currentCallUser = null;
+});
+
+endCallBtn.addEventListener('click', () => {
+    endCall();
+});
+
+toggleAudioBtn.addEventListener('click', () => {
+    if (localStream) {
+        audioEnabled = !audioEnabled;
+        localStream.getAudioTracks().forEach(track => {
+            track.enabled = audioEnabled;
+        });
+        
+        if (audioEnabled) {
+            toggleAudioBtn.innerHTML = '<i class="fas fa-microphone"></i>';
+            toggleAudioBtn.style.background = 'rgba(255, 255, 255, 0.2)';
+        } else {
+            toggleAudioBtn.innerHTML = '<i class="fas fa-microphone-slash"></i>';
+            toggleAudioBtn.style.background = '#f44336';
+        }
+    }
+});
+
+toggleVideoBtn.addEventListener('click', () => {
+    if (localStream) {
+        videoEnabled = !videoEnabled;
+        localStream.getVideoTracks().forEach(track => {
+            track.enabled = videoEnabled;
+        });
+        
+        if (videoEnabled) {
+            toggleVideoBtn.innerHTML = '<i class="fas fa-video"></i>';
+            toggleVideoBtn.style.background = 'rgba(255, 255, 255, 0.2)';
+        } else {
+            toggleVideoBtn.innerHTML = '<i class="fas fa-video-slash"></i>';
+            toggleVideoBtn.style.background = '#f44336';
+        }
+    }
 });

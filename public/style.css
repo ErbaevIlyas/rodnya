@@ -2369,3 +2369,340 @@ body.dark-theme .upload-progress-bar {
     background: #ccc;
     border-radius: 3px;
 }
+
+/* Звонки */
+.incoming-call-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.7);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 400;
+    padding: 20px;
+}
+
+.incoming-call-modal.active {
+    display: flex;
+}
+
+.incoming-call-content {
+    background: white;
+    border-radius: 16px;
+    padding: 40px 30px;
+    text-align: center;
+    max-width: 320px;
+    width: 100%;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+}
+
+.incoming-call-header {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.incoming-call-header i {
+    font-size: 32px;
+    color: #667eea;
+    animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.1); }
+}
+
+.incoming-call-header h2 {
+    font-size: 18px;
+    color: #333;
+    margin: 0;
+}
+
+.incoming-call-info {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 30px;
+}
+
+.caller-name {
+    font-size: 24px;
+    font-weight: 700;
+    color: #333;
+}
+
+.call-status {
+    font-size: 14px;
+    color: #999;
+}
+
+.incoming-call-buttons {
+    display: flex;
+    gap: 20px;
+    justify-content: center;
+}
+
+.call-btn {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    border: none;
+    font-size: 24px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.call-btn.accept {
+    background: #4caf50;
+    color: white;
+}
+
+.call-btn.accept:hover {
+    background: #45a049;
+    transform: scale(1.1);
+    box-shadow: 0 6px 16px rgba(76, 175, 80, 0.4);
+}
+
+.call-btn.reject {
+    background: #f44336;
+    color: white;
+}
+
+.call-btn.reject:hover {
+    background: #da190b;
+    transform: scale(1.1);
+    box-shadow: 0 6px 16px rgba(244, 67, 54, 0.4);
+}
+
+/* Активный звонок */
+.active-call-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: #000;
+    display: none;
+    flex-direction: column;
+    z-index: 400;
+    padding: 0;
+}
+
+.active-call-modal.active {
+    display: flex;
+}
+
+.active-call-content {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+}
+
+.active-call-header {
+    background: rgba(0, 0, 0, 0.7);
+    color: white;
+    padding: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+    backdrop-filter: blur(10px);
+}
+
+.call-user {
+    font-size: 18px;
+    font-weight: 600;
+}
+
+.call-duration {
+    font-size: 16px;
+    font-weight: 600;
+    font-family: 'Courier New', monospace;
+}
+
+.active-call-video-container {
+    flex: 1;
+    position: relative;
+    background: #000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+
+#local-video {
+    position: absolute;
+    bottom: 16px;
+    right: 16px;
+    width: 120px;
+    height: 160px;
+    border-radius: 8px;
+    background: #1a1a1a;
+    object-fit: cover;
+    border: 2px solid white;
+    z-index: 10;
+}
+
+#remote-video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.active-call-controls {
+    background: rgba(0, 0, 0, 0.7);
+    padding: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+    flex-shrink: 0;
+    backdrop-filter: blur(10px);
+}
+
+.call-control-btn {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(255, 255, 255, 0.2);
+    color: white;
+    font-size: 24px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.call-control-btn:hover {
+    background: rgba(255, 255, 255, 0.3);
+    transform: scale(1.05);
+}
+
+.call-control-btn.end-call {
+    background: #f44336;
+}
+
+.call-control-btn.end-call:hover {
+    background: #da190b;
+    transform: scale(1.1);
+    box-shadow: 0 6px 16px rgba(244, 67, 54, 0.4);
+}
+
+.call-control-btn.disabled {
+    background: rgba(255, 255, 255, 0.1);
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Кнопка звонка в списке пользователей */
+.user-call-btn {
+    background: none;
+    border: none;
+    color: #667eea;
+    font-size: 16px;
+    cursor: pointer;
+    padding: 6px 8px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 32px;
+    min-height: 32px;
+    transition: all 0.2s;
+    margin-left: auto;
+    flex-shrink: 0;
+}
+
+.user-call-btn:hover {
+    background: rgba(102, 126, 234, 0.1);
+    transform: scale(1.1);
+}
+
+.user-item:hover .user-call-btn {
+    opacity: 1;
+}
+
+/* Тёмная тема для звонков */
+body.dark-theme .incoming-call-content {
+    background: #1f1f1f;
+    color: #e0e0e0;
+}
+
+body.dark-theme .incoming-call-header h2 {
+    color: #e0e0e0;
+}
+
+body.dark-theme .caller-name {
+    color: #e0e0e0;
+}
+
+body.dark-theme .call-status {
+    color: #999;
+}
+
+body.dark-theme .active-call-header {
+    background: rgba(0, 0, 0, 0.9);
+    color: #e0e0e0;
+}
+
+body.dark-theme .active-call-controls {
+    background: rgba(0, 0, 0, 0.9);
+}
+
+/* Мобильные устройства */
+@media (max-width: 768px) {
+    #local-video {
+        width: 80px;
+        height: 120px;
+        bottom: 80px;
+        right: 12px;
+    }
+
+    .active-call-controls {
+        padding: 16px;
+        gap: 16px;
+    }
+
+    .call-control-btn {
+        width: 48px;
+        height: 48px;
+        font-size: 20px;
+    }
+
+    .incoming-call-content {
+        max-width: 280px;
+        padding: 30px 20px;
+    }
+
+    .incoming-call-header i {
+        font-size: 28px;
+    }
+
+    .incoming-call-header h2 {
+        font-size: 16px;
+    }
+
+    .caller-name {
+        font-size: 20px;
+    }
+
+    .call-btn {
+        width: 52px;
+        height: 52px;
+        font-size: 20px;
+    }
+}

@@ -85,6 +85,20 @@ async function initializeDB() {
         await pool.query(`
             ALTER TABLE messages ADD COLUMN IF NOT EXISTS read_status INTEGER DEFAULT 0
         `);
+
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS calls (
+                id SERIAL PRIMARY KEY,
+                caller VARCHAR(255) NOT NULL,
+                recipient VARCHAR(255) NOT NULL,
+                status VARCHAR(50) DEFAULT 'pending',
+                duration INTEGER DEFAULT 0,
+                started_at TIMESTAMP,
+                ended_at TIMESTAMP,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+        console.log('✅ Таблица calls готова');
     } catch (err) {
         console.error('❌ Ошибка инициализации БД:', err);
     }
@@ -807,6 +821,283 @@ io.on('connection', (socket) => {
             console.log('✅ Push подписка сохранена в БД для:', username);
         } catch (error) {
             console.error('❌ Ошибка подписки на push:', error);
+        }
+    });
+    
+    // Инициирование звонка
+    socket.on('initiate-call', async (data) => {
+        try {
+            const caller = socket.username;
+            const recipient = data.recipientUsername;
+            
+            if (!caller || !recipient) return;
+            
+            console.log(`📞 ${caller} инициирует звонок к ${recipient}`);
+            
+            // Сохраняем звонок в БД
+            const result = await pool.query(
+                `INSERT INTO calls (caller, recipient, status, started_at) 
+                 VALUES ($1, $2, $3, CURRENT_TIMESTAMP) RETURNING id`,
+                [caller, recipient, 'pending']
+            );
+            
+            const callId = result.rows[0].id;
+            
+            // Ищем сокет получателя
+            let recipientSocketId = null;
+            for (const [socketId, user] of connectedUsers.entries()) {
+                if (user.username === recipient) {
+                    recipientSocketId = socketId;
+                    break;
+                }
+            }
+            
+            if (recipientSocketId) {
+                // Получатель онлайн - отправляем через socket
+                console.log(`✅ ${recipient} онлайн, отправляем звонок`);
+                io.to(recipientSocketId).emit('incoming-call', {
+                    callId: callId,
+                    caller: caller,
+                    timestamp: new Date().toLocaleString('ru-RU')
+                });
+            } else {
+                // Получатель офлайн - отправляем push
+                console.log(`⚠️ ${recipient} офлайн, отправляем push`);
+                try {
+                    const subResult = await pool.query(
+                        'SELECT subscription FROM push_subscriptions WHERE username = $1',
+                        [recipient]
+                    );
+                    
+                    if (subResult.rows.length > 0) {
+                        const subscription = subResult.rows[0].subscription;
+                        sendPushNotification(subscription, {
+                            title: `Звонок от ${caller}`,
+                            body: 'Входящий звонок',
+                            tag: `call-${callId}`
+                        });
+                    }
+                } catch (dbError) {
+                    console.error(`❌ Ошибка при отправке push:`, dbError);
+                }
+            }
+            
+            // Отправляем подтверждение инициатору
+            socket.emit('call-initiated', { callId: callId, recipient: recipient });
+            
+        } catch (error) {
+            console.error('❌ Ошибка инициирования звонка:', error);
+            socket.emit('call-error', { message: 'Ошибка при инициировании звонка' });
+        }
+    });
+    
+    // Принятие звонка
+    socket.on('accept-call', async (data) => {
+        try {
+            const callId = data.callId;
+            const recipient = socket.username;
+            
+            console.log(`✅ ${recipient} принял звонок ${callId}`);
+            
+            // Обновляем статус звонка
+            await pool.query(
+                'UPDATE calls SET status = $1 WHERE id = $2',
+                ['accepted', callId]
+            );
+            
+            // Получаем информацию о звонке
+            const callResult = await pool.query(
+                'SELECT caller FROM calls WHERE id = $1',
+                [callId]
+            );
+            
+            if (callResult.rows.length > 0) {
+                const caller = callResult.rows[0].caller;
+                
+                // Ищем сокет звонящего
+                let callerSocketId = null;
+                for (const [socketId, user] of connectedUsers.entries()) {
+                    if (user.username === caller) {
+                        callerSocketId = socketId;
+                        break;
+                    }
+                }
+                
+                if (callerSocketId) {
+                    io.to(callerSocketId).emit('call-accepted', {
+                        callId: callId,
+                        recipient: recipient
+                    });
+                }
+            }
+            
+            socket.emit('call-accepted-confirmed', { callId: callId });
+            
+        } catch (error) {
+            console.error('❌ Ошибка принятия звонка:', error);
+            socket.emit('call-error', { message: 'Ошибка при принятии звонка' });
+        }
+    });
+    
+    // Отклонение звонка
+    socket.on('reject-call', async (data) => {
+        try {
+            const callId = data.callId;
+            const recipient = socket.username;
+            
+            console.log(`❌ ${recipient} отклонил звонок ${callId}`);
+            
+            // Обновляем статус звонка
+            await pool.query(
+                'UPDATE calls SET status = $1, ended_at = CURRENT_TIMESTAMP WHERE id = $2',
+                ['rejected', callId]
+            );
+            
+            // Получаем информацию о звонке
+            const callResult = await pool.query(
+                'SELECT caller FROM calls WHERE id = $1',
+                [callId]
+            );
+            
+            if (callResult.rows.length > 0) {
+                const caller = callResult.rows[0].caller;
+                
+                // Ищем сокет звонящего
+                let callerSocketId = null;
+                for (const [socketId, user] of connectedUsers.entries()) {
+                    if (user.username === caller) {
+                        callerSocketId = socketId;
+                        break;
+                    }
+                }
+                
+                if (callerSocketId) {
+                    io.to(callerSocketId).emit('call-rejected', {
+                        callId: callId,
+                        reason: 'Звонок отклонен'
+                    });
+                }
+            }
+            
+        } catch (error) {
+            console.error('❌ Ошибка отклонения звонка:', error);
+        }
+    });
+    
+    // Завершение звонка
+    socket.on('end-call', async (data) => {
+        try {
+            const callId = data.callId;
+            const duration = data.duration || 0;
+            
+            console.log(`📞 Звонок ${callId} завершен. Длительность: ${duration}с`);
+            
+            // Обновляем статус звонка
+            await pool.query(
+                'UPDATE calls SET status = $1, duration = $2, ended_at = CURRENT_TIMESTAMP WHERE id = $3',
+                ['completed', duration, callId]
+            );
+            
+            // Получаем информацию о звонке
+            const callResult = await pool.query(
+                'SELECT caller, recipient FROM calls WHERE id = $1',
+                [callId]
+            );
+            
+            if (callResult.rows.length > 0) {
+                const { caller, recipient } = callResult.rows[0];
+                
+                // Отправляем уведомление обоим участникам
+                for (const [socketId, user] of connectedUsers.entries()) {
+                    if (user.username === caller || user.username === recipient) {
+                        io.to(socketId).emit('call-ended', {
+                            callId: callId,
+                            duration: duration
+                        });
+                    }
+                }
+            }
+            
+        } catch (error) {
+            console.error('❌ Ошибка завершения звонка:', error);
+        }
+    });
+    
+    // WebRTC сигнализация - отправка SDP offer
+    socket.on('webrtc-offer', (data) => {
+        try {
+            const { callId, offer, recipientUsername } = data;
+            
+            // Ищем сокет получателя
+            let recipientSocketId = null;
+            for (const [socketId, user] of connectedUsers.entries()) {
+                if (user.username === recipientUsername) {
+                    recipientSocketId = socketId;
+                    break;
+                }
+            }
+            
+            if (recipientSocketId) {
+                io.to(recipientSocketId).emit('webrtc-offer', {
+                    callId: callId,
+                    offer: offer,
+                    callerUsername: socket.username
+                });
+            }
+        } catch (error) {
+            console.error('❌ Ошибка отправки WebRTC offer:', error);
+        }
+    });
+    
+    // WebRTC сигнализация - отправка SDP answer
+    socket.on('webrtc-answer', (data) => {
+        try {
+            const { callId, answer, callerUsername } = data;
+            
+            // Ищем сокет звонящего
+            let callerSocketId = null;
+            for (const [socketId, user] of connectedUsers.entries()) {
+                if (user.username === callerUsername) {
+                    callerSocketId = socketId;
+                    break;
+                }
+            }
+            
+            if (callerSocketId) {
+                io.to(callerSocketId).emit('webrtc-answer', {
+                    callId: callId,
+                    answer: answer,
+                    recipientUsername: socket.username
+                });
+            }
+        } catch (error) {
+            console.error('❌ Ошибка отправки WebRTC answer:', error);
+        }
+    });
+    
+    // WebRTC сигнализация - отправка ICE candidate
+    socket.on('webrtc-ice-candidate', (data) => {
+        try {
+            const { callId, candidate, targetUsername } = data;
+            
+            // Ищем сокет целевого пользователя
+            let targetSocketId = null;
+            for (const [socketId, user] of connectedUsers.entries()) {
+                if (user.username === targetUsername) {
+                    targetSocketId = socketId;
+                    break;
+                }
+            }
+            
+            if (targetSocketId) {
+                io.to(targetSocketId).emit('webrtc-ice-candidate', {
+                    callId: callId,
+                    candidate: candidate,
+                    senderUsername: socket.username
+                });
+            }
+        } catch (error) {
+            console.error('❌ Ошибка отправки ICE candidate:', error);
         }
     });
     
