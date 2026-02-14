@@ -370,10 +370,12 @@ socket.on('login-response', (data) => {
 
 socket.on('users-list', (users) => {
     allUsers = users;
-    updateUsersList();
     
-    // Обновляем аватарку в приватном чате если она открыта
-    if (currentChatUser) {
+    // Обновляем список пользователей только если мы в общем чате
+    if (!currentChatUser) {
+        updateUsersList();
+    } else {
+        // Если мы в приватном чате, только обновляем информацию о пользователе
         const userInfo = users.find(u => u.username === currentChatUser);
         if (userInfo) {
             const chatUserAvatar = document.getElementById('chat-user-avatar');
@@ -411,13 +413,9 @@ socket.on('users-list', (users) => {
             chatUserStatus.textContent = statusText;
             chatUserStatus.className = 'chat-user-status' + (userInfo.isOnline ? ' online' : '');
             
-            // Обновляем видимость кнопки звонка
+            // Показываем кнопку звонка всегда
             const chatCallBtn = document.getElementById('chat-call-btn');
-            if (userInfo.isOnline) {
-                chatCallBtn.style.display = 'flex';
-            } else {
-                chatCallBtn.style.display = 'none';
-            }
+            chatCallBtn.style.display = 'flex';
         }
     }
 });
@@ -729,18 +727,13 @@ function openPrivateChat(username) {
     chatUserStatus.textContent = statusText;
     chatUserStatus.className = 'chat-user-status' + (isOnline ? ' online' : '');
     
-    // Показываем кнопку звонка если пользователь онлайн
-    if (isOnline) {
-        chatCallBtn.style.display = 'flex';
-        chatCallBtn.onclick = () => initiateCall(username);
-    } else {
-        chatCallBtn.style.display = 'none';
-    }
+    // Показываем кнопку звонка всегда
+    chatCallBtn.style.display = 'flex';
+    chatCallBtn.onclick = () => initiateCall(username);
     
     messagesContainer.innerHTML = '';
     
     unreadMessages[username] = 0;
-    updateUsersList();
     
     socket.emit('load-private-messages', { username: username });
     
@@ -1965,18 +1958,16 @@ function updateUsersList() {
         userItem.appendChild(statusDot);
         userItem.appendChild(userName);
         
-        // Кнопка звонка
-        if (isOnline) {
-            const callBtn = document.createElement('button');
-            callBtn.className = 'user-call-btn';
-            callBtn.innerHTML = '<i class="fas fa-phone"></i>';
-            callBtn.title = 'Позвонить';
-            callBtn.onclick = (e) => {
-                e.stopPropagation();
-                initiateCall(username);
-            };
-            userItem.appendChild(callBtn);
-        }
+        // Кнопка звонка - показываем всегда
+        const callBtn = document.createElement('button');
+        callBtn.className = 'user-call-btn';
+        callBtn.innerHTML = '<i class="fas fa-phone"></i>';
+        callBtn.title = 'Позвонить';
+        callBtn.onclick = (e) => {
+            e.stopPropagation();
+            initiateCall(username);
+        };
+        userItem.appendChild(callBtn);
         
         if (unreadMessages[username] && unreadMessages[username] > 0) {
             const badge = document.createElement('div');
