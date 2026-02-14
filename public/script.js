@@ -236,6 +236,12 @@ document.addEventListener('DOMContentLoaded', () => {
             subscribeToPushNotifications();
         }
     }
+    
+    // Отключаем кнопку демонстрации экрана на мобильных устройствах
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    if (isMobile || !navigator.mediaDevices.getDisplayMedia) {
+        toggleScreenBtn.style.display = 'none';
+    }
 });
 
 // Переключение между формами
@@ -2088,14 +2094,28 @@ async function createPeerConnection() {
         
         // Обработка локального потока
         peerConnection.ontrack = (event) => {
-            console.log('📹 Получен удаленный поток');
-            remoteStream = event.streams[0];
-            remoteVideo.srcObject = remoteStream;
+            console.log('📹 Получен удаленный поток', event);
+            console.log('📹 Треки:', event.track.kind, event.streams);
             
-            // Адаптируем размер видео в зависимости от соотношения сторон
-            remoteVideo.onloadedmetadata = () => {
-                adjustVideoLayout();
-            };
+            if (event.streams && event.streams.length > 0) {
+                remoteStream = event.streams[0];
+                console.log('📹 Установлен remoteStream:', remoteStream);
+                remoteVideo.srcObject = remoteStream;
+                console.log('📹 remoteVideo.srcObject установлен');
+                
+                // Пытаемся воспроизвести видео
+                remoteVideo.play().catch(err => {
+                    console.warn('⚠️ Ошибка воспроизведения видео:', err);
+                });
+                
+                // Адаптируем размер видео в зависимости от соотношения сторон
+                remoteVideo.onloadedmetadata = () => {
+                    console.log('📹 Видео загружено');
+                    adjustVideoLayout();
+                };
+            } else {
+                console.warn('⚠️ Нет потоков в event.streams');
+            }
         };
         
         // Обработка ICE candidates
@@ -2124,7 +2144,9 @@ async function createPeerConnection() {
         
         // Добавляем локальный поток с оптимальными параметрами
         if (localStream) {
+            console.log('🎤 Добавляем локальный поток с треками:', localStream.getTracks().map(t => t.kind));
             localStream.getTracks().forEach(track => {
+                console.log(`🎤 Добавляем трек: ${track.kind}, enabled: ${track.enabled}`);
                 const sender = peerConnection.addTrack(track, localStream);
                 
                 // Оптимизируем параметры видео трека
@@ -2165,7 +2187,7 @@ async function startCall(recipientUsername, isInitiator) {
     try {
         console.log(`🎤 Начинаем звонок с ${recipientUsername}`);
         
-        // Получаем доступ только к микрофону (видео отключено по умолчанию)
+        // Получаем доступ к микрофону и камере, но видео будет отключено
         const constraints = {
             audio: {
                 echoCancellation: true,
@@ -2173,11 +2195,28 @@ async function startCall(recipientUsername, isInitiator) {
                 autoGainControl: true,
                 sampleRate: 48000
             },
-            video: false  // Видео отключено по умолчанию
+            video: {
+                width: { min: 320, ideal: 1280, max: 1920 },
+                height: { min: 240, ideal: 720, max: 1080 },
+                frameRate: { ideal: 30, max: 60 },
+                facingMode: 'user'
+            }
         };
         
         localStream = await navigator.mediaDevices.getUserMedia(constraints);
+        console.log('🎤 Получен локальный поток:', localStream.getTracks().map(t => t.kind));
         localVideo.srcObject = localStream;
+        
+        // Пытаемся воспроизвести локальное видео
+        localVideo.play().catch(err => {
+            console.warn('⚠️ Ошибка воспроизведения локального видео:', err);
+        });
+        
+        // Отключаем видео трек по умолчанию
+        localStream.getVideoTracks().forEach(track => {
+            console.log('🎥 Отключаем видео трек');
+            track.enabled = false;
+        });
         
         // Создаем WebRTC соединение
         await createPeerConnection();
@@ -2293,12 +2332,17 @@ function endCall() {
     currentCallId = null;
     currentCallUser = null;
     audioEnabled = true;
-    videoEnabled = true;
+    videoEnabled = false;  // Видео отключено по умолчанию
     screenEnabled = false;
     
     // Обновляем кнопки
     toggleAudioBtn.innerHTML = '<i class="fas fa-microphone"></i>';
-    toggleVideoBtn.innerHTML = '<i class="fas fa-video"></i>';
+    toggleAudioBtn.style.background = 'rgba(255, 255, 255, 0.2)';
+    
+    toggleVideoBtn.innerHTML = '<i class="fas fa-video-slash"></i>';
+    toggleVideoBtn.style.background = '#f44336';  // Красная кнопка - видео отключено
+    
+    toggleScreenBtn.style.background = 'rgba(255, 255, 255, 0.2)';
 }
 
 // Обработчики кнопок звонка
@@ -2399,6 +2443,12 @@ toggleVideoBtn.addEventListener('click', async () => {
 toggleScreenBtn.addEventListener('click', async () => {
     if (!peerConnection) return;
     
+    // Проверяем поддержку демонстрации экрана
+    if (!navigator.mediaDevices.getDisplayMedia) {
+        alert('Демонстрация экрана не поддерживается на этом устройстве');
+        return;
+    }
+    
     try {
         if (screenEnabled) {
             // Отключаем демонстрацию экрана
@@ -2423,12 +2473,20 @@ toggleScreenBtn.addEventListener('click', async () => {
             console.log('✅ Демонстрация экрана отключена');
         } else {
             // Включаем демонстрацию экрана
-            screenStream = await navigator.mediaDevices.getDisplayMedia({
-                video: {
-                    cursor: 'always'
-                },
-                audio: false
-            });
+            try {
+                screenStream = await navigator.mediaDevices.getDisplayMedia({
+                    video: {
+                        cursor: 'always'
+                    },
+                    audio: false
+                });
+            } catch (error) {
+                if (error.name === 'NotAllowedError') {
+                    console.log('⚠️ Пользователь отменил выбор экрана');
+                    return;
+                }
+                throw error;
+            }
             
             const screenTrack = screenStream.getVideoTracks()[0];
             
