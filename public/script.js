@@ -1958,17 +1958,6 @@ function updateUsersList() {
         userItem.appendChild(statusDot);
         userItem.appendChild(userName);
         
-        // Кнопка звонка - показываем всегда
-        const callBtn = document.createElement('button');
-        callBtn.className = 'user-call-btn';
-        callBtn.innerHTML = '<i class="fas fa-phone"></i>';
-        callBtn.title = 'Позвонить';
-        callBtn.onclick = (e) => {
-            e.stopPropagation();
-            initiateCall(username);
-        };
-        userItem.appendChild(callBtn);
-        
         if (unreadMessages[username] && unreadMessages[username] > 0) {
             const badge = document.createElement('div');
             badge.className = 'unread-badge';
