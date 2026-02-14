@@ -360,6 +360,55 @@ socket.on('login-response', (data) => {
 socket.on('users-list', (users) => {
     allUsers = users;
     updateUsersList();
+    
+    // Обновляем аватарку в приватном чате если она открыта
+    if (currentChatUser) {
+        const userInfo = users.find(u => u.username === currentChatUser);
+        if (userInfo) {
+            const chatUserAvatar = document.getElementById('chat-user-avatar');
+            const chatUserStatus = document.getElementById('chat-user-status');
+            
+            if (userInfo.avatar_url) {
+                chatUserAvatar.src = userInfo.avatar_url;
+                chatUserAvatar.style.display = 'block';
+            } else {
+                chatUserAvatar.style.display = 'none';
+            }
+            
+            // Обновляем статус
+            let statusText = 'Был в сети';
+            if (userInfo.isOnline) {
+                statusText = 'Онлайн';
+            } else if (userInfo.lastOnline) {
+                const lastOnlineDate = new Date(userInfo.lastOnline);
+                const now = new Date();
+                const diffMinutes = Math.floor((now - lastOnlineDate) / 60000);
+                
+                if (diffMinutes < 1) {
+                    statusText = 'Только что';
+                } else if (diffMinutes < 60) {
+                    statusText = `Был в сети ${diffMinutes} мин назад`;
+                } else if (diffMinutes < 1440) {
+                    const hours = Math.floor(diffMinutes / 60);
+                    statusText = `Был в сети ${hours}ч назад`;
+                } else {
+                    const days = Math.floor(diffMinutes / 1440);
+                    statusText = `Был в сети ${days}д назад`;
+                }
+            }
+            
+            chatUserStatus.textContent = statusText;
+            chatUserStatus.className = 'chat-user-status' + (userInfo.isOnline ? ' online' : '');
+            
+            // Обновляем видимость кнопки звонка
+            const chatCallBtn = document.getElementById('chat-call-btn');
+            if (userInfo.isOnline) {
+                chatCallBtn.style.display = 'flex';
+            } else {
+                chatCallBtn.style.display = 'none';
+            }
+        }
+    }
 });
 
 socket.on('online-users', (users) => {
@@ -612,14 +661,19 @@ function openPrivateChat(username) {
     currentChatUser = username;
     const backBtn = document.getElementById('back-to-general-btn');
     const chatTitle = document.getElementById('chat-title');
+    const chatUserAvatar = document.getElementById('chat-user-avatar');
+    const chatUserStatus = document.getElementById('chat-user-status');
+    const chatCallBtn = document.getElementById('chat-call-btn');
     
     backBtn.style.display = 'flex';
     
     // Получаем информацию о пользователе
     const userInfo = allUsers.find(u => u.username === username);
     let statusText = 'Был в сети';
+    let isOnline = false;
     
     if (userInfo) {
+        isOnline = userInfo.isOnline;
         if (userInfo.isOnline) {
             statusText = 'Онлайн';
         } else if (userInfo.lastOnline) {
@@ -639,9 +693,31 @@ function openPrivateChat(username) {
                 statusText = `Был в сети ${days}д назад`;
             }
         }
+        
+        // Показываем аватарку
+        if (userInfo.avatar_url) {
+            chatUserAvatar.src = userInfo.avatar_url;
+            chatUserAvatar.style.display = 'block';
+        } else {
+            chatUserAvatar.style.display = 'none';
+        }
+    } else {
+        chatUserAvatar.style.display = 'none';
     }
     
-    chatTitle.innerHTML = `💬 ${username}<br><span style="font-size: 12px; color: #999;">${statusText}</span>`;
+    // Обновляем заголовок
+    chatTitle.textContent = username;
+    chatUserStatus.textContent = statusText;
+    chatUserStatus.className = 'chat-user-status' + (isOnline ? ' online' : '');
+    
+    // Показываем кнопку звонка если пользователь онлайн
+    if (isOnline) {
+        chatCallBtn.style.display = 'flex';
+        chatCallBtn.onclick = () => initiateCall(username);
+    } else {
+        chatCallBtn.style.display = 'none';
+    }
+    
     messagesContainer.innerHTML = '';
     
     unreadMessages[username] = 0;
@@ -657,9 +733,17 @@ function backToGeneralChat() {
     currentChatUser = null;
     const backBtn = document.getElementById('back-to-general-btn');
     const chatTitle = document.getElementById('chat-title');
+    const chatUserAvatar = document.getElementById('chat-user-avatar');
+    const chatUserStatus = document.getElementById('chat-user-status');
+    const chatCallBtn = document.getElementById('chat-call-btn');
+    const typingIndicator = document.getElementById('typing-indicator');
     
     backBtn.style.display = 'none';
     chatTitle.textContent = 'Общий чат';
+    chatUserAvatar.style.display = 'none';
+    chatUserStatus.textContent = '';
+    chatCallBtn.style.display = 'none';
+    typingIndicator.style.display = 'none';
     messagesContainer.innerHTML = `
         <div class="welcome-message">
             <i class="fas fa-heart"></i>
@@ -706,6 +790,25 @@ sendBtn.addEventListener('click', sendMessage);
 messageInput.addEventListener('keypress', (e) => {
     if (e.key === 'Enter') {
         sendMessage();
+    }
+});
+
+// Отправляем событие печатания
+let typingTimeout;
+messageInput.addEventListener('input', () => {
+    if (currentChatUser && socket.connected) {
+        socket.emit('user-typing', { 
+            recipientUsername: currentChatUser,
+            isTyping: true 
+        });
+        
+        clearTimeout(typingTimeout);
+        typingTimeout = setTimeout(() => {
+            socket.emit('user-typing', { 
+                recipientUsername: currentChatUser,
+                isTyping: false 
+            });
+        }, 3000);
     }
 });
 
@@ -1270,6 +1373,19 @@ socket.on('private-message', (data) => {
                 icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y="75" font-size="75">👥</text></svg>'
             });
         }
+    }
+});
+
+// Событие печатания
+socket.on('user-typing', (data) => {
+    const typingIndicator = document.getElementById('typing-indicator');
+    const typingUserName = document.getElementById('typing-user-name');
+    
+    if (data.from === currentChatUser && data.isTyping) {
+        typingUserName.textContent = data.from;
+        typingIndicator.style.display = 'block';
+    } else if (data.from === currentChatUser && !data.isTyping) {
+        typingIndicator.style.display = 'none';
     }
 });
 

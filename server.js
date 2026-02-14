@@ -341,8 +341,15 @@ io.on('connection', (socket) => {
             console.log('✅ Пользователь зарегистрирован:', username);
             socket.emit('register-response', { success: true, message: 'Регистрация успешна' });
             
-            const result = await pool.query('SELECT username FROM users');
-            const usersList = result.rows.map(u => u.username);
+            // Отправляем полный список пользователей со всей информацией
+            const result = await pool.query('SELECT username, last_online, avatar_url FROM users');
+            const onlineUsernames = Array.from(connectedUsers.values()).map(u => u.username);
+            const usersList = result.rows.map(u => ({
+                username: u.username,
+                isOnline: onlineUsernames.includes(u.username),
+                lastOnline: u.last_online,
+                avatar_url: u.avatar_url
+            }));
             io.emit('users-list', usersList);
             
         } catch (error) {
@@ -1224,6 +1231,34 @@ io.on('connection', (socket) => {
             }
         } catch (error) {
             console.error('❌ Ошибка отправки ICE candidate:', error);
+        }
+    });
+    
+    // Событие печатания
+    socket.on('user-typing', (data) => {
+        try {
+            const { recipientUsername, isTyping } = data;
+            const sender = socket.username;
+            
+            if (!sender || !recipientUsername) return;
+            
+            // Ищем сокет получателя
+            let recipientSocketId = null;
+            for (const [socketId, user] of connectedUsers.entries()) {
+                if (user.username === recipientUsername) {
+                    recipientSocketId = socketId;
+                    break;
+                }
+            }
+            
+            if (recipientSocketId) {
+                io.to(recipientSocketId).emit('user-typing', {
+                    from: sender,
+                    isTyping: isTyping
+                });
+            }
+        } catch (error) {
+            console.error('❌ Ошибка события печатания:', error);
         }
     });
     

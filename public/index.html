@@ -89,7 +89,16 @@
                     <button class="back-to-general-btn" id="back-to-general-btn" style="display: none;">
                         <i class="fas fa-arrow-left"></i> Общий чат
                     </button>
-                    <h2 id="chat-title">Общий чат</h2>
+                    <div class="chat-header-info">
+                        <img id="chat-user-avatar" class="chat-user-avatar" src="" alt="Avatar" style="display: none;">
+                        <div class="chat-header-text">
+                            <h2 id="chat-title">Общий чат</h2>
+                            <span id="chat-user-status" class="chat-user-status"></span>
+                        </div>
+                    </div>
+                    <button class="chat-call-btn" id="chat-call-btn" style="display: none;" title="Позвонить">
+                        <i class="fas fa-phone"></i>
+                    </button>
                 </div>
 
                 <div class="messages" id="messages">
@@ -164,6 +173,10 @@
                         <div class="fullscreen-image-container" id="fullscreen-image-container">
                             <img id="fullscreen-image" src="" alt="Image">
                         </div>
+                    </div>
+                    
+                    <div class="typing-indicator" id="typing-indicator" style="display: none;">
+                        <span id="typing-user-name"></span> печатает<span class="typing-dots"><span>.</span><span>.</span><span>.</span></span>
                     </div>
                     
                     <div class="input-area">

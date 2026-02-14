@@ -2706,3 +2706,151 @@ body.dark-theme .active-call-controls {
         font-size: 20px;
     }
 }
+
+/* Приватный чат - аватарка и информация */
+.chat-header-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: 1;
+    min-width: 0;
+}
+
+.chat-user-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid #667eea;
+    flex-shrink: 0;
+}
+
+.chat-header-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    flex: 1;
+}
+
+.chat-header-text h2 {
+    font-size: 16px;
+    color: #333;
+    margin: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.chat-user-status {
+    font-size: 11px;
+    color: #999;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.chat-user-status.online {
+    color: #4caf50;
+    font-weight: 600;
+}
+
+/* Кнопка звонка в приватном чате */
+.chat-call-btn {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border: none;
+    color: white;
+    font-size: 18px;
+    padding: 8px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    min-width: 40px;
+    min-height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    flex-shrink: 0;
+}
+
+.chat-call-btn:hover {
+    opacity: 0.9;
+    transform: scale(1.05);
+}
+
+.chat-call-btn:active {
+    transform: scale(0.95);
+}
+
+/* Индикатор печатания */
+.typing-indicator {
+    padding: 8px 12px;
+    font-size: 13px;
+    color: #999;
+    font-style: italic;
+    background: #f5f5f5;
+    border-top: 1px solid #eee;
+}
+
+.typing-dots {
+    margin-left: 4px;
+}
+
+.typing-dots span {
+    animation: typing 1.4s infinite;
+}
+
+.typing-dots span:nth-child(2) {
+    animation-delay: 0.2s;
+}
+
+.typing-dots span:nth-child(3) {
+    animation-delay: 0.4s;
+}
+
+@keyframes typing {
+    0%, 60%, 100% {
+        opacity: 0.5;
+    }
+    30% {
+        opacity: 1;
+    }
+}
+
+/* Тёмная тема */
+body.dark-theme .chat-header-text h2 {
+    color: #e0e0e0;
+}
+
+body.dark-theme .chat-user-status {
+    color: #999;
+}
+
+body.dark-theme .typing-indicator {
+    background: #2a2a2a;
+    border-top: 1px solid #333;
+    color: #999;
+}
+
+/* Мобильные устройства */
+@media (max-width: 768px) {
+    .chat-header-info {
+        gap: 8px;
+    }
+
+    .chat-user-avatar {
+        width: 36px;
+        height: 36px;
+    }
+
+    .chat-header-text h2 {
+        font-size: 14px;
+    }
+
+    .chat-call-btn {
+        padding: 6px 10px;
+        font-size: 16px;
+        min-width: 36px;
+        min-height: 36px;
+    }
+}
