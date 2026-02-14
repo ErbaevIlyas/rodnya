@@ -134,6 +134,7 @@ let currentPreviewFile = null;
 let allUsers = [];
 let onlineUsers = [];
 let unreadMessages = {};
+let userListRefreshInterval = null;
 
 // Функция для звукового уведомления
 function playNotificationSound() {
@@ -346,6 +347,16 @@ socket.on('login-response', (data) => {
         if ('Notification' in window && Notification.permission === 'default') {
             notificationPermissionBanner.style.display = 'flex';
         }
+        
+        // Запускаем периодическое обновление списка пользователей каждые 3 секунды
+        if (userListRefreshInterval) {
+            clearInterval(userListRefreshInterval);
+        }
+        userListRefreshInterval = setInterval(() => {
+            if (socket.connected) {
+                socket.emit('get-users-list');
+            }
+        }, 3000);
     } else {
         // Если ошибка при автозаходе, показываем экран авторизации
         authModal.style.display = 'flex';
@@ -469,10 +480,12 @@ async function subscribeToPushNotifications() {
                     console.log(`📞 Действие со звонком: ${event.data.action}`);
                     
                     if (event.data.action === 'accept') {
+                        stopRingtone();
                         currentCallId = event.data.callId;
                         currentCallUser = event.data.caller;
                         socket.emit('accept-call', { callId: event.data.callId });
                     } else if (event.data.action === 'reject') {
+                        stopRingtone();
                         socket.emit('reject-call', { callId: event.data.callId });
                     }
                 }
@@ -632,6 +645,12 @@ async function uploadAvatar(file) {
 // Выход
 logoutBtn.addEventListener('click', () => {
     clearCredentials();
+    
+    // Останавливаем периодическое обновление списка пользователей
+    if (userListRefreshInterval) {
+        clearInterval(userListRefreshInterval);
+        userListRefreshInterval = null;
+    }
     
     currentUsername = '';
     currentChatUser = null;
@@ -1993,11 +2012,17 @@ socket.on('incoming-call', async (data) => {
     incomingCallerName.textContent = data.caller;
     incomingCallModal.classList.add('active');
     
-    // Звуковое уведомление
+    // Воспроизводим рингтон
     try {
-        playNotificationSound();
+        startRingtone();
     } catch (e) {
-        console.log('Ошибка звука:', e);
+        console.log('Ошибка рингтона:', e);
+        // Если рингтон не сработал, используем обычный звук
+        try {
+            playNotificationSound();
+        } catch (e2) {
+            console.log('Ошибка звука:', e2);
+        }
     }
 });
 
@@ -2073,7 +2098,9 @@ socket.on('webrtc-ice-candidate', async (data) => {
 async function createPeerConnection() {
     try {
         peerConnection = new RTCPeerConnection({
-            iceServers: iceServers
+            iceServers: iceServers,
+            bundlePolicy: 'max-bundle',
+            rtcpMuxPolicy: 'require'
         });
         
         // Обработка локального потока
@@ -2081,6 +2108,11 @@ async function createPeerConnection() {
             console.log('📹 Получен удаленный поток');
             remoteStream = event.streams[0];
             remoteVideo.srcObject = remoteStream;
+            
+            // Адаптируем размер видео в зависимости от соотношения сторон
+            remoteVideo.onloadedmetadata = () => {
+                adjustVideoLayout();
+            };
         };
         
         // Обработка ICE candidates
@@ -2102,10 +2134,41 @@ async function createPeerConnection() {
             }
         };
         
-        // Добавляем локальный поток
+        // Обработка изменения состояния ICE
+        peerConnection.oniceconnectionstatechange = () => {
+            console.log(`❄️ ICE состояние: ${peerConnection.iceConnectionState}`);
+        };
+        
+        // Добавляем локальный поток с оптимальными параметрами
         if (localStream) {
             localStream.getTracks().forEach(track => {
-                peerConnection.addTrack(track, localStream);
+                const sender = peerConnection.addTrack(track, localStream);
+                
+                // Оптимизируем параметры видео трека
+                if (track.kind === 'video') {
+                    const parameters = sender.getParameters();
+                    if (!parameters.encodings) {
+                        parameters.encodings = [{}];
+                    }
+                    
+                    // Устанавливаем максимальный битрейт для видео
+                    parameters.encodings[0].maxBitrate = 2500000; // 2.5 Mbps
+                    parameters.encodings[0].maxFramerate = 30;
+                    
+                    sender.setParameters(parameters).catch(e => console.log('Ошибка установки параметров:', e));
+                }
+                
+                // Оптимизируем параметры аудио трека
+                if (track.kind === 'audio') {
+                    const parameters = sender.getParameters();
+                    if (!parameters.encodings) {
+                        parameters.encodings = [{}];
+                    }
+                    
+                    parameters.encodings[0].maxBitrate = 128000; // 128 kbps
+                    
+                    sender.setParameters(parameters).catch(e => console.log('Ошибка установки параметров:', e));
+                }
             });
         }
         
@@ -2119,27 +2182,35 @@ async function startCall(recipientUsername, isInitiator) {
     try {
         console.log(`🎤 Начинаем звонок с ${recipientUsername}`);
         
-        // Получаем доступ к микрофону и камере
-        localStream = await navigator.mediaDevices.getUserMedia({
+        // Получаем доступ к микрофону и камере с оптимальными настройками
+        const constraints = {
             audio: {
                 echoCancellation: true,
                 noiseSuppression: true,
-                autoGainControl: true
+                autoGainControl: true,
+                sampleRate: 48000
             },
             video: {
-                width: { ideal: 1280 },
-                height: { ideal: 720 }
+                width: { min: 320, ideal: 1280, max: 1920 },
+                height: { min: 240, ideal: 720, max: 1080 },
+                frameRate: { ideal: 30, max: 60 },
+                facingMode: 'user'
             }
-        });
+        };
         
+        localStream = await navigator.mediaDevices.getUserMedia(constraints);
         localVideo.srcObject = localStream;
         
         // Создаем WebRTC соединение
         await createPeerConnection();
         
-        // Если мы инициатор, создаем offer
+        // Если мы инициатор, создаем offer с оптимальными параметрами
         if (isInitiator) {
-            const offer = await peerConnection.createOffer();
+            const offerOptions = {
+                offerToReceiveAudio: true,
+                offerToReceiveVideo: true
+            };
+            const offer = await peerConnection.createOffer(offerOptions);
             await peerConnection.setLocalDescription(offer);
             
             socket.emit('webrtc-offer', {
@@ -2174,9 +2245,30 @@ function updateCallDuration() {
     }
 }
 
+// Адаптация видео layout в зависимости от соотношения сторон
+function adjustVideoLayout() {
+    if (!remoteVideo || !remoteVideo.videoWidth || !remoteVideo.videoHeight) return;
+    
+    const videoAspectRatio = remoteVideo.videoWidth / remoteVideo.videoHeight;
+    const containerAspectRatio = remoteVideo.parentElement.clientWidth / remoteVideo.parentElement.clientHeight;
+    
+    // Если видео с телефона (портретное - узкое), используем contain
+    // Если видео с ПК (ландшафтное - широкое), используем cover
+    if (videoAspectRatio < 1) {
+        // Портретное видео (телефон)
+        remoteVideo.style.objectFit = 'contain';
+    } else {
+        // Ландшафтное видео (ПК)
+        remoteVideo.style.objectFit = 'contain';
+    }
+}
+
 // Завершение звонка
 function endCall() {
     console.log('📞 Завершаем звонок');
+    
+    // Останавливаем рингтон
+    stopRingtone();
     
     // Отправляем событие завершения
     if (currentCallId) {
@@ -2227,11 +2319,13 @@ function endCall() {
 // Обработчики кнопок звонка
 acceptCallBtn.addEventListener('click', () => {
     console.log(`✅ Принимаем звонок`);
+    stopRingtone();
     socket.emit('accept-call', { callId: currentCallId });
 });
 
 rejectCallBtn.addEventListener('click', () => {
     console.log(`❌ Отклоняем звонок`);
+    stopRingtone();
     socket.emit('reject-call', { callId: currentCallId });
     incomingCallModal.classList.remove('active');
     currentCallId = null;
@@ -2273,5 +2367,13 @@ toggleVideoBtn.addEventListener('click', () => {
             toggleVideoBtn.innerHTML = '<i class="fas fa-video-slash"></i>';
             toggleVideoBtn.style.background = '#f44336';
         }
+    }
+});
+
+
+// Адаптация видео при изменении размера окна
+window.addEventListener('resize', () => {
+    if (remoteVideo && remoteVideo.srcObject) {
+        adjustVideoLayout();
     }
 });

@@ -1262,6 +1262,23 @@ io.on('connection', (socket) => {
         }
     });
     
+    // Запрос списка пользователей
+    socket.on('get-users-list', async () => {
+        try {
+            const result = await pool.query('SELECT username, last_online, avatar_url FROM users');
+            const onlineUsernames = Array.from(connectedUsers.values()).map(u => u.username);
+            const usersList = result.rows.map(u => ({
+                username: u.username,
+                isOnline: onlineUsernames.includes(u.username),
+                lastOnline: u.last_online,
+                avatar_url: u.avatar_url
+            }));
+            socket.emit('users-list', usersList);
+        } catch (error) {
+            console.error('❌ Ошибка получения списка пользователей:', error);
+        }
+    });
+    
     // Отключение
     socket.on('disconnect', () => {
         console.log('👤 Пользователь отключился:', socket.id);
