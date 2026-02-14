@@ -1869,6 +1869,7 @@ const rejectCallBtn = document.getElementById('reject-call-btn');
 const endCallBtn = document.getElementById('end-call-btn');
 const toggleAudioBtn = document.getElementById('toggle-audio-btn');
 const toggleVideoBtn = document.getElementById('toggle-video-btn');
+const toggleScreenBtn = document.getElementById('toggle-screen-btn');
 const localVideo = document.getElementById('local-video');
 const remoteVideo = document.getElementById('remote-video');
 const activeCallUser = document.getElementById('active-call-user');
@@ -1883,6 +1884,8 @@ let callStartTime = null;
 let callDurationInterval = null;
 let audioEnabled = true;
 let videoEnabled = true;
+let screenEnabled = false;
+let screenStream = null;
 
 // STUN серверы для NAT traversal
 const iceServers = [
@@ -2162,7 +2165,7 @@ async function startCall(recipientUsername, isInitiator) {
     try {
         console.log(`🎤 Начинаем звонок с ${recipientUsername}`);
         
-        // Получаем доступ к микрофону и камере с оптимальными настройками
+        // Получаем доступ только к микрофону (видео отключено по умолчанию)
         const constraints = {
             audio: {
                 echoCancellation: true,
@@ -2170,12 +2173,7 @@ async function startCall(recipientUsername, isInitiator) {
                 autoGainControl: true,
                 sampleRate: 48000
             },
-            video: {
-                width: { min: 320, ideal: 1280, max: 1920 },
-                height: { min: 240, ideal: 720, max: 1080 },
-                frameRate: { ideal: 30, max: 60 },
-                facingMode: 'user'
-            }
+            video: false  // Видео отключено по умолчанию
         };
         
         localStream = await navigator.mediaDevices.getUserMedia(constraints);
@@ -2210,7 +2208,7 @@ async function startCall(recipientUsername, isInitiator) {
         
     } catch (error) {
         console.error('❌ Ошибка начала звонка:', error);
-        alert('Ошибка доступа к микрофону/камере: ' + error.message);
+        alert('Ошибка доступа к микрофону: ' + error.message);
         endCall();
     }
 }
@@ -2280,6 +2278,12 @@ function endCall() {
         remoteStream = null;
     }
     
+    // Закрываем демонстрацию экрана
+    if (screenStream) {
+        screenStream.getTracks().forEach(track => track.stop());
+        screenStream = null;
+    }
+    
     // Закрываем WebRTC соединение
     if (peerConnection) {
         peerConnection.close();
@@ -2290,6 +2294,7 @@ function endCall() {
     currentCallUser = null;
     audioEnabled = true;
     videoEnabled = true;
+    screenEnabled = false;
     
     // Обновляем кнопки
     toggleAudioBtn.innerHTML = '<i class="fas fa-microphone"></i>';
@@ -2333,10 +2338,15 @@ toggleAudioBtn.addEventListener('click', () => {
     }
 });
 
-toggleVideoBtn.addEventListener('click', () => {
-    if (localStream) {
+toggleVideoBtn.addEventListener('click', async () => {
+    if (!localStream) return;
+    
+    const videoTracks = localStream.getVideoTracks();
+    
+    if (videoTracks.length > 0) {
+        // Видео уже есть, просто переключаем его
         videoEnabled = !videoEnabled;
-        localStream.getVideoTracks().forEach(track => {
+        videoTracks.forEach(track => {
             track.enabled = videoEnabled;
         });
         
@@ -2347,9 +2357,116 @@ toggleVideoBtn.addEventListener('click', () => {
             toggleVideoBtn.innerHTML = '<i class="fas fa-video-slash"></i>';
             toggleVideoBtn.style.background = '#f44336';
         }
+    } else {
+        // Видео нет, добавляем его
+        try {
+            const videoConstraints = {
+                width: { min: 320, ideal: 1280, max: 1920 },
+                height: { min: 240, ideal: 720, max: 1080 },
+                frameRate: { ideal: 30, max: 60 },
+                facingMode: 'user'
+            };
+            
+            const videoStream = await navigator.mediaDevices.getUserMedia({ video: videoConstraints });
+            const videoTrack = videoStream.getVideoTracks()[0];
+            
+            // Добавляем видео трек к существующему потоку
+            localStream.addTrack(videoTrack);
+            
+            // Добавляем трек к WebRTC соединению
+            if (peerConnection) {
+                const sender = peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
+                if (sender) {
+                    await sender.replaceTrack(videoTrack);
+                } else {
+                    await peerConnection.addTrack(videoTrack, localStream);
+                }
+            }
+            
+            videoEnabled = true;
+            toggleVideoBtn.innerHTML = '<i class="fas fa-video"></i>';
+            toggleVideoBtn.style.background = 'rgba(255, 255, 255, 0.2)';
+            
+            console.log('✅ Видео включено');
+        } catch (error) {
+            console.error('❌ Ошибка включения видео:', error);
+            alert('Ошибка доступа к камере: ' + error.message);
+        }
     }
 });
 
+// Демонстрация экрана
+toggleScreenBtn.addEventListener('click', async () => {
+    if (!peerConnection) return;
+    
+    try {
+        if (screenEnabled) {
+            // Отключаем демонстрацию экрана
+            if (screenStream) {
+                screenStream.getTracks().forEach(track => track.stop());
+                screenStream = null;
+            }
+            
+            // Возвращаем видео с камеры если оно было
+            if (videoEnabled && localStream) {
+                const videoTrack = localStream.getVideoTracks()[0];
+                if (videoTrack) {
+                    const sender = peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
+                    if (sender) {
+                        await sender.replaceTrack(videoTrack);
+                    }
+                }
+            }
+            
+            screenEnabled = false;
+            toggleScreenBtn.style.background = 'rgba(255, 255, 255, 0.2)';
+            console.log('✅ Демонстрация экрана отключена');
+        } else {
+            // Включаем демонстрацию экрана
+            screenStream = await navigator.mediaDevices.getDisplayMedia({
+                video: {
+                    cursor: 'always'
+                },
+                audio: false
+            });
+            
+            const screenTrack = screenStream.getVideoTracks()[0];
+            
+            // Заменяем видео трек на экран
+            const sender = peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
+            if (sender) {
+                await sender.replaceTrack(screenTrack);
+            } else {
+                await peerConnection.addTrack(screenTrack, screenStream);
+            }
+            
+            // Обработка остановки демонстрации экрана пользователем
+            screenTrack.onended = async () => {
+                if (videoEnabled && localStream) {
+                    const videoTrack = localStream.getVideoTracks()[0];
+                    if (videoTrack) {
+                        const sender = peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
+                        if (sender) {
+                            await sender.replaceTrack(videoTrack);
+                        }
+                    }
+                }
+                screenEnabled = false;
+                toggleScreenBtn.style.background = 'rgba(255, 255, 255, 0.2)';
+                console.log('✅ Демонстрация экрана остановлена пользователем');
+            };
+            
+            screenEnabled = true;
+            toggleScreenBtn.style.background = '#2196F3';
+            console.log('✅ Демонстрация экрана включена');
+        }
+    } catch (error) {
+        console.error('❌ Ошибка демонстрации экрана:', error);
+        if (error.name !== 'NotAllowedError') {
+            alert('Ошибка демонстрации экрана: ' + error.message);
+        }
+    }
+});
 
 // Адаптация видео при изменении размера окна
 window.addEventListener('resize', () => {
