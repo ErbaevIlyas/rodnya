@@ -137,24 +137,6 @@ let unreadMessages = {};
 let userListRefreshInterval = null;
 
 // Функция для звукового уведомления
-function playNotificationSound() {
-    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-    const oscillator = audioContext.createOscillator();
-    const gainNode = audioContext.createGain();
-    
-    oscillator.connect(gainNode);
-    gainNode.connect(audioContext.destination);
-    
-    oscillator.frequency.value = 800;
-    oscillator.type = 'sine';
-    
-    gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
-    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
-    
-    oscillator.start(audioContext.currentTime);
-    oscillator.stop(audioContext.currentTime + 0.5);
-}
-
 // Форматирование времени
 function formatTime(timestamp) {
     const date = new Date(timestamp);
@@ -1376,12 +1358,6 @@ socket.on('private-message', (data) => {
         }
         unreadMessages[data.from]++;
         updateUsersList();
-        
-        try {
-            playNotificationSound();
-        } catch (e) {
-            console.log('Ошибка звука:', e);
-        }
         
         if ('Notification' in window && Notification.permission === 'granted') {
             new Notification(`Сообщение от ${data.from}`, {
