@@ -484,12 +484,10 @@ async function subscribeToPushNotifications() {
                     console.log(`📞 Действие со звонком: ${event.data.action}`);
                     
                     if (event.data.action === 'accept') {
-                        stopRingtone();
                         currentCallId = event.data.callId;
                         currentCallUser = event.data.caller;
                         socket.emit('accept-call', { callId: event.data.callId });
                     } else if (event.data.action === 'reject') {
-                        stopRingtone();
                         socket.emit('reject-call', { callId: event.data.callId });
                     }
                 }
@@ -2000,19 +1998,6 @@ socket.on('incoming-call', async (data) => {
     
     incomingCallerName.textContent = data.caller;
     incomingCallModal.classList.add('active');
-    
-    // Воспроизводим рингтон
-    try {
-        startRingtone();
-    } catch (e) {
-        console.log('Ошибка рингтона:', e);
-        // Если рингтон не сработал, используем обычный звук
-        try {
-            playNotificationSound();
-        } catch (e2) {
-            console.log('Ошибка звука:', e2);
-        }
-    }
 });
 
 socket.on('call-accepted', async (data) => {
@@ -2284,9 +2269,6 @@ function adjustVideoLayout() {
 function endCall() {
     console.log('📞 Завершаем звонок');
     
-    // Останавливаем рингтон
-    stopRingtone();
-    
     // Отправляем событие завершения
     if (currentCallId) {
         const duration = callStartTime ? Math.floor((Date.now() - callStartTime) / 1000) : 0;
@@ -2348,13 +2330,11 @@ function endCall() {
 // Обработчики кнопок звонка
 acceptCallBtn.addEventListener('click', () => {
     console.log(`✅ Принимаем звонок`);
-    stopRingtone();
     socket.emit('accept-call', { callId: currentCallId });
 });
 
 rejectCallBtn.addEventListener('click', () => {
     console.log(`❌ Отклоняем звонок`);
-    stopRingtone();
     socket.emit('reject-call', { callId: currentCallId });
     incomingCallModal.classList.remove('active');
     currentCallId = null;
