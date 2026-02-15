@@ -1,22 +1,83 @@
 {
   "name": "Родня - Социальная сеть",
   "short_name": "Родня",
-  "description": "Социальная сеть для общения с близкими",
+  "description": "Социальная сеть для общения с близкими. Видеозвонки, сообщения, демонстрация экрана",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
-  "background_color": "#4facfe",
+  "background_color": "#ffffff",
   "theme_color": "#4facfe",
-  "orientation": "portrait",
+  "orientation": "portrait-primary",
+  "categories": ["social", "communication"],
+  "screenshots": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "form_factor": "narrow"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "form_factor": "wide"
+    }
+  ],
   "icons": [
     {
       "src": "icon-192.png",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
     },
     {
       "src": "icon-512.png", 
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
-  ]
+  ],
+  "shortcuts": [
+    {
+      "name": "Открыть чат",
+      "short_name": "Чат",
+      "description": "Открыть приложение в режиме чата",
+      "url": "/?mode=chat",
+      "icons": [
+        {
+          "src": "icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    }
+  ],
+  "share_target": {
+    "action": "/share",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url",
+      "files": [
+        {
+          "name": "file",
+          "accept": ["image/*", "video/*", "audio/*", ".pdf", ".doc", ".docx"]
+        }
+      ]
+    }
+  }
 }

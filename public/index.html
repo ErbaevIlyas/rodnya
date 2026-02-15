@@ -4,12 +4,24 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, shrink-to-fit=no">
     <title>Родня - Социальная сеть</title>
-    <link rel="stylesheet" href="style.css?v=15.1">
+    <link rel="stylesheet" href="style.css?v=15.2">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link rel="manifest" href="manifest.json">
+    
+    <!-- PWA Meta Tags -->
     <meta name="theme-color" content="#4facfe">
+    <meta name="description" content="Социальная сеть для общения с близкими. Видеозвонки, сообщения, демонстрация экрана">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Родня">
+    <meta name="msapplication-TileColor" content="#4facfe">
+    <meta name="msapplication-config" content="browserconfig.xml">
+    
+    <!-- Icons -->
     <link rel="apple-touch-icon" href="icon-192.png">
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='75' font-size='75'>👥</text></svg>">
+    <link rel="icon" type="image/png" href="icon-192.png">
 </head>
 <body>
     <!-- Модальное окно авторизации -->
@@ -320,19 +332,47 @@
 
     <script src="/socket.io/socket.io.js"></script>
     <script src="ringtone.js"></script>
-    <script src="script.js?v=15.1"></script>
+    <script src="script.js?v=15.2"></script>
     <script>
+        // PWA Installation
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/sw.js')
+                navigator.serviceWorker.register('/sw.js', { scope: '/' })
                     .then((registration) => {
-                        console.log('SW registered: ', registration);
+                        console.log('✅ Service Worker зарегистрирован:', registration);
+                        
+                        // Проверяем обновления каждые 6 часов
+                        setInterval(() => {
+                            registration.update();
+                        }, 6 * 60 * 60 * 1000);
                     })
-                    .catch((registrationError) => {
-                        console.log('SW registration failed: ', registrationError);
+                    .catch((error) => {
+                        console.error('❌ Ошибка регистрации Service Worker:', error);
                     });
+                
+                // Обработка обновления Service Worker
+                navigator.serviceWorker.addEventListener('controllerchange', () => {
+                    console.log('🔄 Service Worker обновлён');
+                    window.location.reload();
+                });
             });
         }
+        
+        // Запрос на установку PWA
+        let deferredPrompt;
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            console.log('📱 PWA готова к установке');
+            
+            // Можно показать кнопку установки
+            // showInstallButton();
+        });
+        
+        window.addEventListener('appinstalled', () => {
+            console.log('✅ PWA установлена');
+            deferredPrompt = null;
+        });
     </script>
 </body>
 </html>
