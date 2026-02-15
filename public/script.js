@@ -2304,22 +2304,24 @@ function endCall() {
 }
 
 // Обработчики кнопок звонка
-acceptCallBtn.addEventListener('click', (e) => {
-    console.log(`✅ Клик на кнопку принять`, e);
-    e.preventDefault();
-    e.stopPropagation();
+function handleAcceptCall(e) {
+    if (e) {
+        e.preventDefault();
+        e.stopPropagation();
+    }
     console.log(`✅ Принимаем звонок, callId: ${currentCallId}`);
     if (currentCallId) {
         socket.emit('accept-call', { callId: currentCallId });
     } else {
         console.warn('⚠️ currentCallId не установлен');
     }
-});
+}
 
-rejectCallBtn.addEventListener('click', (e) => {
-    console.log(`❌ Клик на кнопку отклонить`, e);
-    e.preventDefault();
-    e.stopPropagation();
+function handleRejectCall(e) {
+    if (e) {
+        e.preventDefault();
+        e.stopPropagation();
+    }
     console.log(`❌ Отклоняем звонок, callId: ${currentCallId}`);
     if (currentCallId) {
         socket.emit('reject-call', { callId: currentCallId });
@@ -2329,7 +2331,16 @@ rejectCallBtn.addEventListener('click', (e) => {
     incomingCallModal.classList.remove('active');
     currentCallId = null;
     currentCallUser = null;
-});
+}
+
+// Добавляем обработчики для обоих типов событий (click, touch и mouse)
+acceptCallBtn.addEventListener('click', handleAcceptCall);
+acceptCallBtn.addEventListener('touchend', handleAcceptCall);
+acceptCallBtn.addEventListener('mousedown', handleAcceptCall);
+
+rejectCallBtn.addEventListener('click', handleRejectCall);
+rejectCallBtn.addEventListener('touchend', handleRejectCall);
+rejectCallBtn.addEventListener('mousedown', handleRejectCall);
 
 endCallBtn.addEventListener('click', () => {
     endCall();
