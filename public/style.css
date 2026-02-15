@@ -2381,18 +2381,21 @@ body.dark-theme .upload-progress-bar {
     display: none;
     align-items: center;
     justify-content: center;
-    z-index: 400;
+    z-index: 9999;
     padding: 20px;
+    pointer-events: none;
 }
 
 .incoming-call-modal.active {
     display: flex;
+    pointer-events: auto;
 }
 
 .incoming-call-content {
     background: white;
     border-radius: 16px;
     padding: 40px 30px;
+    pointer-events: auto;
     text-align: center;
     max-width: 320px;
     width: 100%;
@@ -2446,20 +2449,26 @@ body.dark-theme .upload-progress-bar {
     display: flex;
     gap: 20px;
     justify-content: center;
+    margin-top: 30px;
+    z-index: 1000;
 }
 
 .call-btn {
-    width: 60px;
-    height: 60px;
+    width: 70px;
+    height: 70px;
     border-radius: 50%;
     border: none;
-    font-size: 24px;
+    font-size: 28px;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
     transition: all 0.2s;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    touch-action: manipulation;
+    -webkit-user-select: none;
+    user-select: none;
+    pointer-events: auto;
 }
 
 .call-btn.accept {
@@ -2471,6 +2480,10 @@ body.dark-theme .upload-progress-bar {
     background: #45a049;
     transform: scale(1.1);
     box-shadow: 0 6px 16px rgba(76, 175, 80, 0.4);
+}
+
+.call-btn.accept:active {
+    transform: scale(0.95);
 }
 
 .call-btn.reject {

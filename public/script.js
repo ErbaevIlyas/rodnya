@@ -2304,14 +2304,28 @@ function endCall() {
 }
 
 // Обработчики кнопок звонка
-acceptCallBtn.addEventListener('click', () => {
-    console.log(`✅ Принимаем звонок`);
-    socket.emit('accept-call', { callId: currentCallId });
+acceptCallBtn.addEventListener('click', (e) => {
+    console.log(`✅ Клик на кнопку принять`, e);
+    e.preventDefault();
+    e.stopPropagation();
+    console.log(`✅ Принимаем звонок, callId: ${currentCallId}`);
+    if (currentCallId) {
+        socket.emit('accept-call', { callId: currentCallId });
+    } else {
+        console.warn('⚠️ currentCallId не установлен');
+    }
 });
 
-rejectCallBtn.addEventListener('click', () => {
-    console.log(`❌ Отклоняем звонок`);
-    socket.emit('reject-call', { callId: currentCallId });
+rejectCallBtn.addEventListener('click', (e) => {
+    console.log(`❌ Клик на кнопку отклонить`, e);
+    e.preventDefault();
+    e.stopPropagation();
+    console.log(`❌ Отклоняем звонок, callId: ${currentCallId}`);
+    if (currentCallId) {
+        socket.emit('reject-call', { callId: currentCallId });
+    } else {
+        console.warn('⚠️ currentCallId не установлен');
+    }
     incomingCallModal.classList.remove('active');
     currentCallId = null;
     currentCallUser = null;
