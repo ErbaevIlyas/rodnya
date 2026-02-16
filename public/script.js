@@ -137,6 +137,24 @@ let unreadMessages = {};
 let userListRefreshInterval = null;
 
 // Функция для звукового уведомления
+function playNotificationSound() {
+    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    const oscillator = audioContext.createOscillator();
+    const gainNode = audioContext.createGain();
+    
+    oscillator.connect(gainNode);
+    gainNode.connect(audioContext.destination);
+    
+    oscillator.frequency.value = 800;
+    oscillator.type = 'sine';
+    
+    gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+    
+    oscillator.start(audioContext.currentTime);
+    oscillator.stop(audioContext.currentTime + 0.5);
+}
+
 // Форматирование времени
 function formatTime(timestamp) {
     const date = new Date(timestamp);
@@ -466,10 +484,12 @@ async function subscribeToPushNotifications() {
                     console.log(`📞 Действие со звонком: ${event.data.action}`);
                     
                     if (event.data.action === 'accept') {
+                        stopRingtone();
                         currentCallId = event.data.callId;
                         currentCallUser = event.data.caller;
                         socket.emit('accept-call', { callId: event.data.callId });
                     } else if (event.data.action === 'reject') {
+                        stopRingtone();
                         socket.emit('reject-call', { callId: event.data.callId });
                     }
                 }
@@ -1359,6 +1379,12 @@ socket.on('private-message', (data) => {
         unreadMessages[data.from]++;
         updateUsersList();
         
+        try {
+            playNotificationSound();
+        } catch (e) {
+            console.log('Ошибка звука:', e);
+        }
+        
         if ('Notification' in window && Notification.permission === 'granted') {
             new Notification(`Сообщение от ${data.from}`, {
                 body: data.message || 'Отправил файл',
@@ -1974,6 +2000,19 @@ socket.on('incoming-call', async (data) => {
     
     incomingCallerName.textContent = data.caller;
     incomingCallModal.classList.add('active');
+    
+    // Воспроизводим рингтон
+    try {
+        startRingtone();
+    } catch (e) {
+        console.log('Ошибка рингтона:', e);
+        // Если рингтон не сработал, используем обычный звук
+        try {
+            playNotificationSound();
+        } catch (e2) {
+            console.log('Ошибка звука:', e2);
+        }
+    }
 });
 
 socket.on('call-accepted', async (data) => {
@@ -2245,6 +2284,9 @@ function adjustVideoLayout() {
 function endCall() {
     console.log('📞 Завершаем звонок');
     
+    // Останавливаем рингтон
+    stopRingtone();
+    
     // Отправляем событие завершения
     if (currentCallId) {
         const duration = callStartTime ? Math.floor((Date.now() - callStartTime) / 1000) : 0;
@@ -2304,43 +2346,20 @@ function endCall() {
 }
 
 // Обработчики кнопок звонка
-function handleAcceptCall(e) {
-    if (e) {
-        e.preventDefault();
-        e.stopPropagation();
-    }
-    console.log(`✅ Принимаем звонок, callId: ${currentCallId}`);
-    if (currentCallId) {
-        socket.emit('accept-call', { callId: currentCallId });
-    } else {
-        console.warn('⚠️ currentCallId не установлен');
-    }
-}
+acceptCallBtn.addEventListener('click', () => {
+    console.log(`✅ Принимаем звонок`);
+    stopRingtone();
+    socket.emit('accept-call', { callId: currentCallId });
+});
 
-function handleRejectCall(e) {
-    if (e) {
-        e.preventDefault();
-        e.stopPropagation();
-    }
-    console.log(`❌ Отклоняем звонок, callId: ${currentCallId}`);
-    if (currentCallId) {
-        socket.emit('reject-call', { callId: currentCallId });
-    } else {
-        console.warn('⚠️ currentCallId не установлен');
-    }
+rejectCallBtn.addEventListener('click', () => {
+    console.log(`❌ Отклоняем звонок`);
+    stopRingtone();
+    socket.emit('reject-call', { callId: currentCallId });
     incomingCallModal.classList.remove('active');
     currentCallId = null;
     currentCallUser = null;
-}
-
-// Добавляем обработчики для обоих типов событий (click, touch и mouse)
-acceptCallBtn.addEventListener('click', handleAcceptCall);
-acceptCallBtn.addEventListener('touchend', handleAcceptCall);
-acceptCallBtn.addEventListener('mousedown', handleAcceptCall);
-
-rejectCallBtn.addEventListener('click', handleRejectCall);
-rejectCallBtn.addEventListener('touchend', handleRejectCall);
-rejectCallBtn.addEventListener('mousedown', handleRejectCall);
+});
 
 endCallBtn.addEventListener('click', () => {
     endCall();
