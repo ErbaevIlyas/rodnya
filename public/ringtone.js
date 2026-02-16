@@ -40,8 +40,16 @@ function playTone(audioContext, frequency, startTime, duration) {
 
 // Функция для повторного воспроизведения рингтона каждые 3 секунды
 let ringtoneInterval = null;
+let isRingtoneActive = false;
 
 function startRingtone() {
+    // Если рингтон уже проигрывается, не запускаем его снова
+    if (isRingtoneActive) {
+        console.log('⚠️ Рингтон уже проигрывается, игнорируем повторный запуск');
+        return;
+    }
+    
+    isRingtoneActive = true;
     playRingtone();
     ringtoneInterval = setInterval(() => {
         playRingtone();
@@ -53,4 +61,5 @@ function stopRingtone() {
         clearInterval(ringtoneInterval);
         ringtoneInterval = null;
     }
+    isRingtoneActive = false;
 }

@@ -1892,6 +1892,7 @@ let audioEnabled = true;
 let videoEnabled = true;
 let screenEnabled = false;
 let screenStream = null;
+let isCallInProgress = false; // Флаг для предотвращения множественных звонков
 
 // STUN серверы для NAT traversal
 const iceServers = [
@@ -1906,6 +1907,13 @@ const iceServers = [
 function initiateCall(recipientUsername) {
     if (!currentUsername) return;
     
+    // Если звонок уже в процессе, игнорируем повторный клик
+    if (isCallInProgress) {
+        console.log('⚠️ Звонок уже в процессе, игнорируем повторный клик');
+        return;
+    }
+    
+    isCallInProgress = true;
     console.log(`📞 Инициируем звонок к ${recipientUsername}`);
     socket.emit('initiate-call', { recipientUsername: recipientUsername });
 }
@@ -2033,8 +2041,10 @@ socket.on('call-accepted-confirmed', async (data) => {
 
 socket.on('call-rejected', (data) => {
     console.log(`❌ Звонок отклонен`);
+    stopRingtone();
     currentCallId = null;
     currentCallUser = null;
+    isCallInProgress = false; // Сбрасываем флаг при отклонении
     alert('Звонок отклонен');
 });
 
@@ -2334,6 +2344,7 @@ function endCall() {
     audioEnabled = true;
     videoEnabled = false;  // Видео отключено по умолчанию
     screenEnabled = false;
+    isCallInProgress = false; // Сбрасываем флаг звонка
     
     // Обновляем кнопки
     toggleAudioBtn.innerHTML = '<i class="fas fa-microphone"></i>';
@@ -2359,6 +2370,7 @@ rejectCallBtn.addEventListener('click', () => {
     incomingCallModal.classList.remove('active');
     currentCallId = null;
     currentCallUser = null;
+    isCallInProgress = false; // Сбрасываем флаг при отклонении
 });
 
 endCallBtn.addEventListener('click', () => {
