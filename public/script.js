@@ -1878,6 +1878,7 @@ const toggleVideoBtn = document.getElementById('toggle-video-btn');
 const toggleScreenBtn = document.getElementById('toggle-screen-btn');
 const localVideo = document.getElementById('local-video');
 const remoteVideo = document.getElementById('remote-video');
+const remoteVideoPlaceholder = document.getElementById('remote-video-placeholder');
 const activeCallUser = document.getElementById('active-call-user');
 const callDuration = document.getElementById('call-duration');
 
@@ -1893,6 +1894,7 @@ let videoEnabled = true;
 let screenEnabled = false;
 let screenStream = null;
 let isCallInProgress = false; // Флаг для предотвращения множественных звонков
+let remoteVideoEnabled = true; // Отслеживаем состояние видео удаленного пользователя
 
 // STUN серверы для NAT traversal
 const iceServers = [
@@ -1902,6 +1904,33 @@ const iceServers = [
     { urls: 'stun:stun3.l.google.com:19302' },
     { urls: 'stun:stun4.l.google.com:19302' }
 ];
+
+// Функция для отображения аватарки когда видео отключено
+function updateRemoteVideoDisplay() {
+    if (!remoteVideoEnabled && currentCallUser) {
+        // Видео отключено - показываем аватарку
+        remoteVideo.style.display = 'none';
+        remoteVideoPlaceholder.style.display = 'flex';
+        
+        // Получаем информацию о пользователе
+        const userInfo = allUsers.find(u => u.username === currentCallUser);
+        const avatarDisplay = document.getElementById('remote-avatar-display');
+        const userNameDisplay = document.getElementById('remote-user-name-display');
+        
+        if (userInfo && userInfo.avatar_url) {
+            avatarDisplay.innerHTML = `<img src="${userInfo.avatar_url}" class="remote-avatar-large" alt="${currentCallUser}">`;
+        } else {
+            const initials = currentCallUser.substring(0, 1).toUpperCase();
+            avatarDisplay.innerHTML = `<div class="remote-avatar-placeholder-large">${initials}</div>`;
+        }
+        
+        userNameDisplay.textContent = currentCallUser;
+    } else {
+        // Видео включено - показываем видео
+        remoteVideo.style.display = 'block';
+        remoteVideoPlaceholder.style.display = 'none';
+    }
+}
 
 // Инициирование звонка
 function initiateCall(recipientUsername) {
@@ -2112,6 +2141,27 @@ async function createPeerConnection() {
                 console.log('📹 Установлен remoteStream:', remoteStream);
                 remoteVideo.srcObject = remoteStream;
                 console.log('📹 remoteVideo.srcObject установлен');
+                
+                // Отслеживаем видео треки
+                if (event.track.kind === 'video') {
+                    remoteVideoEnabled = true;
+                    updateRemoteVideoDisplay();
+                    
+                    // Отслеживаем когда видео отключается
+                    event.track.onended = () => {
+                        console.log('📹 Видео трек завершен');
+                        remoteVideoEnabled = false;
+                        updateRemoteVideoDisplay();
+                    };
+                    
+                    // Отслеживаем изменение enabled
+                    const checkVideoStatus = setInterval(() => {
+                        if (event.track.enabled !== remoteVideoEnabled) {
+                            remoteVideoEnabled = event.track.enabled;
+                            updateRemoteVideoDisplay();
+                        }
+                    }, 500);
+                }
                 
                 // Пытаемся воспроизвести видео
                 remoteVideo.play().catch(err => {

@@ -43,11 +43,12 @@ body {
 
 .auth-container {
     background: white;
-    border-radius: 12px;
-    padding: 30px;
+    border-radius: 20px;
+    padding: 40px;
     width: 100%;
-    max-width: 400px;
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+    max-width: 420px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    animation: slideUp 0.4s ease-out;
 }
 
 .auth-header {
@@ -74,34 +75,44 @@ body {
 
 .auth-form input {
     width: 100%;
-    padding: 10px 12px;
-    margin-bottom: 10px;
-    border: 1px solid #ddd;
-    border-radius: 6px;
+    padding: 12px 14px;
+    margin-bottom: 12px;
+    border: 2px solid #e8e8e8;
+    border-radius: 10px;
     font-size: 16px;
+    transition: all 0.3s ease;
+    background: #f8f9ff;
 }
 
 .auth-form input:focus {
     outline: none;
     border-color: #667eea;
-    box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    background: white;
 }
 
 .auth-btn {
     width: 100%;
-    padding: 10px;
+    padding: 12px;
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     color: white;
     border: none;
-    border-radius: 6px;
-    font-size: 14px;
-    font-weight: 600;
+    border-radius: 10px;
+    font-size: 15px;
+    font-weight: 700;
     cursor: pointer;
-    margin-top: 10px;
+    margin-top: 12px;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
 }
 
 .auth-btn:hover {
-    opacity: 0.9;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+}
+
+.auth-btn:active {
+    transform: translateY(0);
 }
 
 .auth-toggle {
@@ -130,12 +141,12 @@ body {
 .header {
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     color: white;
-    padding: 12px 16px;
+    padding: 14px 18px;
     display: flex;
     align-items: center;
     justify-content: space-between;
     flex-shrink: 0;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 4px 20px rgba(102, 126, 234, 0.3);
 }
 
 .logo {
@@ -525,12 +536,14 @@ body.dark-theme .unread-badge {
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     color: white;
     border-bottom-right-radius: 2px;
+    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.2);
 }
 
 .message:not(.own) .message-bubble {
     background: #e8e8e8;
     color: #333;
     border-bottom-left-radius: 2px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
 .message-header {
@@ -951,10 +964,17 @@ body.dark-theme .unread-badge {
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
 }
 
 .send-btn:hover {
-    opacity: 0.9;
+    transform: scale(1.05);
+    box-shadow: 0 6px 16px rgba(102, 126, 234, 0.4);
+}
+
+.send-btn:active {
+    transform: scale(0.95);
 }
 
 /* Эмодзи пикер */
@@ -1325,12 +1345,13 @@ body.dark-theme .unread-badge {
 
 .profile-content {
     background: white;
-    border-radius: 12px;
-    padding: 24px;
+    border-radius: 20px;
+    padding: 28px;
     width: 100%;
-    max-width: 400px;
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+    max-width: 420px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
     position: relative;
+    animation: slideUp 0.4s ease-out;
 }
 
 .close-profile {
@@ -1375,18 +1396,18 @@ body.dark-theme .unread-badge {
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     color: white;
     border: none;
-    padding: 8px 16px;
-    border-radius: 6px;
+    padding: 10px 18px;
+    border-radius: 10px;
     font-size: 13px;
     cursor: pointer;
-    font-weight: 600;
-    transition: all 0.2s;
+    font-weight: 700;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
 }
 
 .change-avatar-btn:hover {
-    opacity: 0.9;
     transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+    box-shadow: 0 6px 16px rgba(102, 126, 234, 0.4);
 }
 
 .profile-form {
@@ -1405,19 +1426,20 @@ body.dark-theme .unread-badge {
 }
 
 .profile-form input {
-    padding: 10px 12px;
-    border: 1px solid #e0e0e0;
-    border-radius: 8px;
+    padding: 12px 14px;
+    border: 2px solid #e8e8e8;
+    border-radius: 10px;
     font-size: 14px;
     font-family: inherit;
-    transition: all 0.2s;
+    transition: all 0.3s ease;
+    background: #f8f9ff;
 }
 
 .profile-form input:focus {
     outline: none;
     border-color: #667eea;
     box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-    background: #f8f9ff;
+    background: white;
 }
 
 .profile-save-btn {
@@ -1425,18 +1447,22 @@ body.dark-theme .unread-badge {
     color: white;
     border: none;
     padding: 12px;
-    border-radius: 8px;
-    font-size: 14px;
-    font-weight: 600;
+    border-radius: 10px;
+    font-size: 15px;
+    font-weight: 700;
     cursor: pointer;
     margin-top: 8px;
-    transition: all 0.2s;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
 }
 
 .profile-save-btn:hover {
-    opacity: 0.9;
     transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+    box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+}
+
+.profile-save-btn:active {
+    transform: translateY(0);
 }
 
 .profile-btn {
@@ -2397,6 +2423,18 @@ body.dark-theme .upload-progress-bar {
     max-width: 320px;
     width: 100%;
     box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+    animation: slideUp 0.3s ease-out;
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(30px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 .incoming-call-header {
@@ -2458,30 +2496,28 @@ body.dark-theme .upload-progress-bar {
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: all 0.2s;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    transition: all 0.3s ease;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
 }
 
 .call-btn.accept {
-    background: #4caf50;
+    background: linear-gradient(135deg, #4caf50 0%, #45a049 100%);
     color: white;
 }
 
 .call-btn.accept:hover {
-    background: #45a049;
-    transform: scale(1.1);
-    box-shadow: 0 6px 16px rgba(76, 175, 80, 0.4);
+    transform: scale(1.12);
+    box-shadow: 0 8px 24px rgba(76, 175, 80, 0.5);
 }
 
 .call-btn.reject {
-    background: #f44336;
+    background: linear-gradient(135deg, #f44336 0%, #da190b 100%);
     color: white;
 }
 
 .call-btn.reject:hover {
-    background: #da190b;
-    transform: scale(1.1);
-    box-shadow: 0 6px 16px rgba(244, 67, 54, 0.4);
+    transform: scale(1.12);
+    box-shadow: 0 8px 24px rgba(244, 67, 54, 0.5);
 }
 
 /* Активный звонок */
@@ -2549,11 +2585,12 @@ body.dark-theme .upload-progress-bar {
     right: 16px;
     width: 120px;
     height: 160px;
-    border-radius: 8px;
+    border-radius: 12px;
     background: #1a1a1a;
     object-fit: contain;
-    border: 2px solid white;
+    border: 3px solid white;
     z-index: 10;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
 }
 
 #remote-video {
@@ -2561,6 +2598,85 @@ body.dark-theme .upload-progress-bar {
     height: 100%;
     object-fit: contain;
     background: #000;
+}
+
+/* Контейнер для аватарки когда камера отключена */
+.remote-video-placeholder {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    position: relative;
+    overflow: hidden;
+}
+
+.remote-video-placeholder::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.1), transparent);
+    pointer-events: none;
+}
+
+.remote-avatar-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+    z-index: 1;
+}
+
+.remote-avatar-large {
+    width: 180px;
+    height: 180px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 4px solid white;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+}
+
+.remote-avatar-placeholder-large {
+    width: 180px;
+    height: 180px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.2);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    font-size: 64px;
+    border: 4px solid white;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+}
+
+.remote-user-name {
+    color: white;
+    font-size: 24px;
+    font-weight: 600;
+    text-align: center;
+}
+
+.remote-camera-off-badge {
+    color: white;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(0, 0, 0, 0.3);
+    padding: 8px 16px;
+    border-radius: 20px;
+    backdrop-filter: blur(10px);
+}
+
+.remote-camera-off-badge i {
+    font-size: 16px;
 }
 
 .active-call-controls {
@@ -2588,21 +2704,24 @@ body.dark-theme .upload-progress-bar {
     justify-content: center;
     transition: all 0.2s;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    backdrop-filter: blur(10px);
 }
 
 .call-control-btn:hover {
     background: rgba(255, 255, 255, 0.3);
     transform: scale(1.05);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
 }
 
 .call-control-btn.end-call {
     background: #f44336;
+    box-shadow: 0 4px 12px rgba(244, 67, 54, 0.4);
 }
 
 .call-control-btn.end-call:hover {
     background: #da190b;
     transform: scale(1.1);
-    box-shadow: 0 6px 16px rgba(244, 67, 54, 0.4);
+    box-shadow: 0 6px 16px rgba(244, 67, 54, 0.6);
 }
 
 .call-control-btn.disabled {
