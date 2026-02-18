@@ -2057,6 +2057,7 @@ socket.on('call-accepted', async (data) => {
     incomingCallModal.classList.remove('active');
     
     // Инициируем WebRTC соединение
+    // Мы уже инициировали звонок, поэтому мы инициатор (true)
     await startCall(data.recipient, true);
 });
 
@@ -2084,15 +2085,55 @@ socket.on('call-ended', (data) => {
 
 socket.on('webrtc-offer', async (data) => {
     console.log(`📡 Получен WebRTC offer`);
+    
+    // Если у нас еще нет локального потока, получаем его
+    if (!localStream) {
+        try {
+            console.log('🎤 Получаем локальный поток перед обработкой offer');
+            const constraints = {
+                audio: {
+                    echoCancellation: true,
+                    noiseSuppression: true,
+                    autoGainControl: true,
+                    sampleRate: 48000
+                },
+                video: {
+                    width: { min: 320, ideal: 1280, max: 1920 },
+                    height: { min: 240, ideal: 720, max: 1080 },
+                    frameRate: { ideal: 30, max: 60 },
+                    facingMode: 'user'
+                }
+            };
+            
+            localStream = await navigator.mediaDevices.getUserMedia(constraints);
+            console.log('🎤 Получен локальный поток:', localStream.getTracks().map(t => t.kind));
+            localVideo.srcObject = localStream;
+            
+            // Отключаем видео трек по умолчанию
+            localStream.getVideoTracks().forEach(track => {
+                track.enabled = false;
+            });
+        } catch (error) {
+            console.error('❌ Ошибка получения локального потока:', error);
+            return;
+        }
+    }
+    
     if (!peerConnection) {
         await createPeerConnection();
     }
     
     try {
+        console.log('📡 Устанавливаем remote description');
         await peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
+        
+        console.log('📡 Создаем answer');
         const answer = await peerConnection.createAnswer();
+        
+        console.log('📡 Устанавливаем local description');
         await peerConnection.setLocalDescription(answer);
         
+        console.log('📡 Отправляем answer');
         socket.emit('webrtc-answer', {
             callId: data.callId,
             answer: answer,
@@ -2106,7 +2147,9 @@ socket.on('webrtc-offer', async (data) => {
 socket.on('webrtc-answer', async (data) => {
     console.log(`📡 Получен WebRTC answer`);
     try {
+        console.log('📡 Устанавливаем remote description для answer');
         await peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
+        console.log('✅ Remote description установлен');
     } catch (error) {
         console.error('❌ Ошибка обработки answer:', error);
     }
@@ -2114,7 +2157,8 @@ socket.on('webrtc-answer', async (data) => {
 
 socket.on('webrtc-ice-candidate', async (data) => {
     try {
-        if (data.candidate) {
+        if (data.candidate && peerConnection) {
+            console.log('❄️ Добавляем ICE candidate');
             await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
         }
     } catch (error) {
@@ -2245,7 +2289,7 @@ async function createPeerConnection() {
 // Начало звонка
 async function startCall(recipientUsername, isInitiator) {
     try {
-        console.log(`🎤 Начинаем звонок с ${recipientUsername}`);
+        console.log(`🎤 Начинаем звонок с ${recipientUsername}, инициатор: ${isInitiator}`);
         
         // Получаем доступ к микрофону и камере, но видео будет отключено
         const constraints = {
@@ -2283,6 +2327,7 @@ async function startCall(recipientUsername, isInitiator) {
         
         // Если мы инициатор, создаем offer с оптимальными параметрами
         if (isInitiator) {
+            console.log('📡 Мы инициатор, создаем offer');
             const offerOptions = {
                 offerToReceiveAudio: true,
                 offerToReceiveVideo: true
@@ -2295,6 +2340,9 @@ async function startCall(recipientUsername, isInitiator) {
                 offer: offer,
                 recipientUsername: recipientUsername
             });
+            console.log('📡 Offer отправлен');
+        } else {
+            console.log('📡 Мы не инициатор, ждем offer');
         }
         
         // Показываем модал активного звонка
