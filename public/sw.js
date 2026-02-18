@@ -1,27 +1,34 @@
-const CACHE_NAME = 'rodnya-v15.1';
+const CACHE_NAME = 'rodnya-v15.2';
 const urlsToCache = [
   '/',
   '/index.html',
   '/style.css',
   '/script.js',
+  '/ringtone.js',
   '/manifest.json',
   'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css'
 ];
 
 self.addEventListener('install', (event) => {
+  console.log('🔧 Service Worker установлен');
   event.waitUntil(
     caches.open(CACHE_NAME)
-      .then((cache) => cache.addAll(urlsToCache))
+      .then((cache) => {
+        console.log('📦 Кешируем файлы');
+        return cache.addAll(urlsToCache);
+      })
       .then(() => self.skipWaiting())
   );
 });
 
 self.addEventListener('activate', (event) => {
+  console.log('🚀 Service Worker активирован');
   event.waitUntil(
     caches.keys().then((cacheNames) => {
       return Promise.all(
         cacheNames.map((cacheName) => {
           if (cacheName !== CACHE_NAME) {
+            console.log('🗑️ Удаляем старый кеш:', cacheName);
             return caches.delete(cacheName);
           }
         })
@@ -59,6 +66,13 @@ self.addEventListener('fetch', (event) => {
 });
 
 // Push notifications
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    console.log('⏭️ Пропускаем ожидание, активируем новую версию');
+    self.skipWaiting();
+  }
+});
+
 self.addEventListener('push', (event) => {
   if (!event.data) return;
   

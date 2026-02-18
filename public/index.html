@@ -336,11 +336,103 @@
             window.addEventListener('load', () => {
                 navigator.serviceWorker.register('/sw.js')
                     .then((registration) => {
-                        console.log('SW registered: ', registration);
+                        console.log('✅ Service Worker зарегистрирован');
+                        
+                        // Проверяем обновления каждые 30 секунд
+                        setInterval(() => {
+                            registration.update().catch(err => {
+                                console.log('⚠️ Ошибка проверки обновлений:', err);
+                            });
+                        }, 30000);
+                        
+                        // Слушаем обновления Service Worker
+                        registration.addEventListener('updatefound', () => {
+                            const newWorker = registration.installing;
+                            console.log('🔄 Найдено обновление Service Worker');
+                            
+                            newWorker.addEventListener('statechange', () => {
+                                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                                    // Новая версия готова
+                                    console.log('📢 Новая версия приложения готова!');
+                                    
+                                    // Показываем уведомление пользователю
+                                    showUpdateNotification();
+                                }
+                            });
+                        });
                     })
                     .catch((registrationError) => {
-                        console.log('SW registration failed: ', registrationError);
+                        console.log('❌ Ошибка регистрации Service Worker:', registrationError);
                     });
+            });
+            
+            // Слушаем сообщения от Service Worker
+            navigator.serviceWorker.addEventListener('controllerchange', () => {
+                console.log('🔄 Service Worker обновлен, перезагружаем страницу');
+                window.location.reload();
+            });
+        }
+        
+        // Функция для показа уведомления об обновлении
+        function showUpdateNotification() {
+            // Создаем баннер обновления
+            const updateBanner = document.createElement('div');
+            updateBanner.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white;
+                padding: 16px 20px;
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 16px;
+                z-index: 9999;
+                box-shadow: 0 4px 16px rgba(102, 126, 234, 0.3);
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            `;
+            
+            updateBanner.innerHTML = `
+                <div style="display: flex; align-items: center; gap: 12px; flex: 1;">
+                    <span style="font-size: 20px;">🔄</span>
+                    <span style="font-weight: 600;">Доступна новая версия приложения</span>
+                </div>
+                <button id="update-btn" style="
+                    background: white;
+                    color: #667eea;
+                    border: none;
+                    padding: 8px 16px;
+                    border-radius: 8px;
+                    font-weight: 600;
+                    cursor: pointer;
+                    transition: all 0.2s ease;
+                ">Обновить</button>
+            `;
+            
+            document.body.insertBefore(updateBanner, document.body.firstChild);
+            
+            // Обработчик кнопки обновления
+            document.getElementById('update-btn').addEventListener('click', () => {
+                // Отправляем сообщение Service Worker о том, что нужно обновиться
+                if (navigator.serviceWorker.controller) {
+                    navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' });
+                }
+                
+                // Перезагружаем страницу
+                window.location.reload();
+            });
+            
+            // Добавляем hover эффект
+            document.getElementById('update-btn').addEventListener('mouseover', function() {
+                this.style.opacity = '0.9';
+                this.style.transform = 'scale(1.05)';
+            });
+            
+            document.getElementById('update-btn').addEventListener('mouseout', function() {
+                this.style.opacity = '1';
+                this.style.transform = 'scale(1)';
             });
         }
     </script>
