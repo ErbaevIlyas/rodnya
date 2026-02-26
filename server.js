@@ -479,6 +479,7 @@ io.on('connection', (socket) => {
                 caption: msg.caption,
                 timestamp: msg.created_at,
                 type: msg.type,
+                readStatus: msg.read_status,
                 avatar_url: avatarMap[msg.from_user] || null
             }));
             
@@ -530,7 +531,7 @@ io.on('connection', (socket) => {
                 id: result.rows[0].id.toString(),
                 username: username,
                 message: data.message,
-                timestamp: new Date().toLocaleString('ru-RU'),
+                timestamp: new Date().getTime(),
                 type: 'text',
                 readStatus: 0
             };
@@ -581,7 +582,7 @@ io.on('connection', (socket) => {
                 url: data.url,
                 mimetype: data.mimetype,
                 caption: data.caption || '',
-                timestamp: new Date().toLocaleString('ru-RU'),
+                timestamp: new Date().getTime(),
                 type: 'file',
                 readStatus: 0
             };
@@ -657,7 +658,7 @@ io.on('connection', (socket) => {
                 from: senderUsername,
                 to: recipientUsername,
                 message: message,
-                timestamp: new Date().toLocaleString('ru-RU'),
+                timestamp: new Date().getTime(),
                 type: 'text',
                 readStatus: 0
             };
@@ -753,7 +754,7 @@ io.on('connection', (socket) => {
                 url: url,
                 mimetype: mimetype,
                 caption: caption || '',
-                timestamp: new Date().toLocaleString('ru-RU'),
+                timestamp: new Date().getTime(),
                 type: 'file',
                 readStatus: 0
             };
