@@ -157,21 +157,7 @@ function playNotificationSound() {
 
 // Форматирование времени
 function formatTime(timestamp) {
-    if (!timestamp) return 'NaN:NaN NaN.NaN.NaN';
-    
-    let date;
-    if (typeof timestamp === 'string') {
-        date = new Date(timestamp);
-    } else if (typeof timestamp === 'number') {
-        date = new Date(timestamp);
-    } else {
-        return 'NaN:NaN NaN.NaN.NaN';
-    }
-    
-    if (isNaN(date.getTime())) {
-        return 'NaN:NaN NaN.NaN.NaN';
-    }
-    
+    const date = new Date(timestamp);
     const hours = String(date.getHours()).padStart(2, '0');
     const minutes = String(date.getMinutes()).padStart(2, '0');
     const day = String(date.getDate()).padStart(2, '0');
@@ -692,15 +678,6 @@ toggleSidebarBtn.addEventListener('click', () => {
     const sidebar = document.querySelector('.sidebar');
     sidebar.classList.toggle('active');
 });
-
-// Кнопка закрытия боковой панели (назад)
-const sidebarBackBtn = document.getElementById('sidebar-back-btn');
-if (sidebarBackBtn) {
-    sidebarBackBtn.addEventListener('click', () => {
-        const sidebar = document.querySelector('.sidebar');
-        sidebar.classList.remove('active');
-    });
-}
 
 // Открытие приватного чата
 function openPrivateChat(username) {
