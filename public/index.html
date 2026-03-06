@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, shrink-to-fit=no">
     <title>Родня - Социальная сеть</title>
-    <link rel="stylesheet" href="style.css?v=15.1">
+    <link rel="stylesheet" href="style.css?v=15.2">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#4facfe">
@@ -54,6 +54,9 @@
             <div class="user-info">
                 <span class="current-user" id="current-user"></span>
                 <span class="online-count">Онлайн: <span id="online-count">0</span></span>
+                <span class="connection-status online" id="connection-status">
+                    <i class="fas fa-wifi"></i> Онлайн
+                </span>
                 <button class="profile-btn" id="profile-btn" title="Профиль">
                     <i class="fas fa-user-circle"></i>
                 </button>
@@ -330,7 +333,7 @@
 
     <script src="/socket.io/socket.io.js"></script>
     <script src="ringtone.js"></script>
-    <script src="script.js?v=15.1"></script>
+    <script src="script.js?v=15.2"></script>
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {

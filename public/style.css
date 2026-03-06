@@ -3152,3 +3152,63 @@ body.dark-theme .typing-indicator {
         right: 8px;
     }
 }
+
+
+/* ===== ИНДИКАТОР СОЕДИНЕНИЯ ===== */
+.connection-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    white-space: nowrap;
+}
+
+.connection-status.online {
+    background: rgba(76, 175, 80, 0.15);
+    color: #4caf50;
+    border: 1px solid rgba(76, 175, 80, 0.3);
+}
+
+.connection-status.online i {
+    animation: wifiPulse 2s ease-in-out infinite;
+}
+
+.connection-status.offline {
+    background: rgba(244, 67, 54, 0.15);
+    color: #f44336;
+    border: 1px solid rgba(244, 67, 54, 0.3);
+}
+
+@keyframes wifiPulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.6;
+    }
+}
+
+/* Тёмная тема */
+body.dark-theme .connection-status.online {
+    background: rgba(76, 175, 80, 0.2);
+    color: #66bb6a;
+    border: 1px solid rgba(76, 175, 80, 0.4);
+}
+
+body.dark-theme .connection-status.offline {
+    background: rgba(244, 67, 54, 0.2);
+    color: #ef5350;
+    border: 1px solid rgba(244, 67, 54, 0.4);
+}
+
+/* Мобильные устройства */
+@media (max-width: 768px) {
+    .connection-status {
+        padding: 4px 8px;
+        font-size: 11px;
+    }
+}

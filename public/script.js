@@ -1,10 +1,199 @@
+// ===== ОЧЕРЕДЬ СООБЩЕНИЙ ДЛЯ ОФЛАЙН РЕЖИМА =====
+class MessageQueue {
+  constructor() {
+    this.queue = [];
+    this.isOnline = navigator.onLine;
+    this.loadQueue();
+    this.setupListeners();
+  }
+
+  setupListeners() {
+    window.addEventListener('online', () => {
+      console.log('🟢 Соединение восстановлено');
+      this.isOnline = true;
+      this.processQueue();
+      updateConnectionStatus();
+    });
+
+    window.addEventListener('offline', () => {
+      console.log('🔴 Соединение потеряно');
+      this.isOnline = false;
+      updateConnectionStatus();
+    });
+  }
+
+  add(type, data) {
+    const message = {
+      id: Date.now(),
+      type,
+      data,
+      timestamp: new Date().toISOString(),
+      retries: 0
+    };
+    this.queue.push(message);
+    this.saveQueue();
+    console.log('📝 Сообщение добавлено в очередь:', message);
+  }
+
+  async processQueue() {
+    if (!this.isOnline || this.queue.length === 0) return;
+
+    console.log(`⏳ Обработка очереди (${this.queue.length} сообщений)`);
+    
+    for (let i = 0; i < this.queue.length; i++) {
+      const msg = this.queue[i];
+      try {
+        if (msg.type === 'message') {
+          socket.emit('send-message', msg.data);
+        } else if (msg.type === 'private-message') {
+          socket.emit('send-private-message', msg.data);
+        } else if (msg.type === 'file') {
+          socket.emit('send-file', msg.data);
+        } else if (msg.type === 'private-file') {
+          socket.emit('send-private-file', msg.data);
+        }
+        this.queue.splice(i, 1);
+        i--;
+        this.saveQueue();
+        await new Promise(r => setTimeout(r, 100));
+      } catch (e) {
+        msg.retries++;
+        if (msg.retries > 3) {
+          this.queue.splice(i, 1);
+          i--;
+        }
+        this.saveQueue();
+      }
+    }
+  }
+
+  saveQueue() {
+    try {
+      localStorage.setItem('rodnya_message_queue', JSON.stringify(this.queue));
+    } catch (e) {
+      console.log('⚠️ Ошибка сохранения очереди:', e);
+    }
+  }
+
+  loadQueue() {
+    try {
+      const saved = localStorage.getItem('rodnya_message_queue');
+      this.queue = saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      this.queue = [];
+    }
+  }
+
+  getQueueSize() {
+    return this.queue.length;
+  }
+}
+
+const messageQueue = new MessageQueue();
+
+// ===== ИНДИКАТОР СОЕДИНЕНИЯ =====
+function updateConnectionStatus() {
+  const statusEl = document.getElementById('connection-status');
+  if (!statusEl) return;
+
+  if (navigator.onLine) {
+    statusEl.className = 'connection-status online';
+    statusEl.innerHTML = '<i class="fas fa-wifi"></i> Онлайн';
+    if (messageQueue.getQueueSize() > 0) {
+      statusEl.innerHTML += ` (${messageQueue.getQueueSize()} в очереди)`;
+    }
+  } else {
+    statusEl.className = 'connection-status offline';
+    statusEl.innerHTML = '<i class="fas fa-wifi-slash"></i> Офлайн';
+  }
+}
+
 // Подключение к Socket.IO
-const socket = io();
+const socket = io({
+  reconnection: true,
+  reconnectionDelay: 1000,
+  reconnectionDelayMax: 5000,
+  reconnectionAttempts: Infinity,
+  transports: ['websocket', 'polling']
+});
+
+// Обработка событий соединения
+socket.on('connect', () => {
+  console.log('✅ Подключено к серверу');
+  updateConnectionStatus();
+  messageQueue.processQueue();
+});
+
+socket.on('disconnect', () => {
+  console.log('❌ Отключено от сервера');
+  updateConnectionStatus();
+});
+
+socket.on('connect_error', (error) => {
+  console.log('⚠️ Ошибка соединения:', error);
+  updateConnectionStatus();
+});
 
 // Пинг сервера каждые 10 минут, чтобы он не засыпал на Render
 setInterval(() => {
   fetch('/ping').catch(() => {});
 }, 10 * 60 * 1000);
+
+// ===== ФУНКЦИЯ ДЛЯ УВЕДОМЛЕНИЙ =====
+function showNotification(message, duration = 3000) {
+  const notification = document.createElement('div');
+  notification.style.cssText = `
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 12px 20px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    z-index: 10000;
+    animation: slideIn 0.3s ease-out;
+    font-size: 14px;
+    max-width: 300px;
+    word-wrap: break-word;
+  `;
+  notification.textContent = message;
+  document.body.appendChild(notification);
+  
+  setTimeout(() => {
+    notification.style.animation = 'slideOut 0.3s ease-out';
+    setTimeout(() => notification.remove(), 300);
+  }, duration);
+}
+
+// Добавим стили для анимаций если их нет
+if (!document.getElementById('notification-styles')) {
+  const style = document.createElement('style');
+  style.id = 'notification-styles';
+  style.textContent = `
+    @keyframes slideIn {
+      from {
+        transform: translateX(400px);
+        opacity: 0;
+      }
+      to {
+        transform: translateX(0);
+        opacity: 1;
+      }
+    }
+    @keyframes slideOut {
+      from {
+        transform: translateX(0);
+        opacity: 1;
+      }
+      to {
+        transform: translateX(400px);
+        opacity: 0;
+      }
+    }
+  `;
+  document.head.appendChild(style);
+}
 
 // ===== ФУНКЦИИ ДЛЯ РАБОТЫ С COOKIES И LOCALSTORAGE =====
 function setCookie(name, value, days = 30) {
@@ -787,15 +976,23 @@ function sendMessage() {
     const message = messageInput.value.trim();
     if (!message) return;
     
+    const messageData = { message: message };
+    
     if (currentChatUser) {
-        socket.emit('send-private-message', {
-            recipientUsername: currentChatUser,
-            message: message
-        });
+        messageData.recipientUsername = currentChatUser;
+        if (socket.connected) {
+            socket.emit('send-private-message', messageData);
+        } else {
+            messageQueue.add('private-message', messageData);
+            showNotification('Сообщение сохранено, отправится при соединении');
+        }
     } else {
-        socket.emit('send-message', {
-            message: message
-        });
+        if (socket.connected) {
+            socket.emit('send-message', messageData);
+        } else {
+            messageQueue.add('message', messageData);
+            showNotification('Сообщение сохранено, отправится при соединении');
+        }
     }
     
     messageInput.value = '';
@@ -1155,22 +1352,34 @@ async function uploadFile(file, caption = '') {
                     }, 300);
                     
                     if (currentChatUser) {
-                        socket.emit('send-private-file', {
+                        const fileData = {
                             recipientUsername: currentChatUser,
                             filename: result.filename,
                             originalname: result.originalname,
                             url: result.url,
                             mimetype: result.mimetype,
                             caption: caption
-                        });
+                        };
+                        if (socket.connected) {
+                            socket.emit('send-private-file', fileData);
+                        } else {
+                            messageQueue.add('private-file', fileData);
+                            showNotification('Файл сохранен, отправится при соединении');
+                        }
                     } else {
-                        socket.emit('send-file', {
+                        const fileData = {
                             filename: result.filename,
                             originalname: result.originalname,
                             url: result.url,
                             mimetype: result.mimetype,
                             caption: caption
-                        });
+                        };
+                        if (socket.connected) {
+                            socket.emit('send-file', fileData);
+                        } else {
+                            messageQueue.add('file', fileData);
+                            showNotification('Файл сохранен, отправится при соединении');
+                        }
                     }
                     
                     removeWelcomeMessage();
