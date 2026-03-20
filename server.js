@@ -426,7 +426,7 @@ io.on('connection', (socket) => {
                 url: msg.url,
                 mimetype: msg.mimetype,
                 caption: msg.caption,
-                timestamp: msg.created_at,
+                timestamp: new Date(msg.created_at).getTime(),
                 type: msg.type,
                 readStatus: msg.read_status
             }));
@@ -477,8 +477,9 @@ io.on('connection', (socket) => {
                 url: msg.url,
                 mimetype: msg.mimetype,
                 caption: msg.caption,
-                timestamp: msg.created_at,
+                timestamp: new Date(msg.created_at).getTime(),
                 type: msg.type,
+                readStatus: msg.read_status,
                 avatar_url: avatarMap[msg.from_user] || null
             }));
             
@@ -530,7 +531,7 @@ io.on('connection', (socket) => {
                 id: result.rows[0].id.toString(),
                 username: username,
                 message: data.message,
-                timestamp: new Date().toLocaleString('ru-RU'),
+                timestamp: Date.now(),
                 type: 'text',
                 readStatus: 0
             };
@@ -581,7 +582,7 @@ io.on('connection', (socket) => {
                 url: data.url,
                 mimetype: data.mimetype,
                 caption: data.caption || '',
-                timestamp: new Date().toLocaleString('ru-RU'),
+                timestamp: Date.now(),
                 type: 'file',
                 readStatus: 0
             };
@@ -657,7 +658,7 @@ io.on('connection', (socket) => {
                 from: senderUsername,
                 to: recipientUsername,
                 message: message,
-                timestamp: new Date().toLocaleString('ru-RU'),
+                timestamp: Date.now(),
                 type: 'text',
                 readStatus: 0
             };
@@ -753,7 +754,7 @@ io.on('connection', (socket) => {
                 url: url,
                 mimetype: mimetype,
                 caption: caption || '',
-                timestamp: new Date().toLocaleString('ru-RU'),
+                timestamp: Date.now(),
                 type: 'file',
                 readStatus: 0
             };

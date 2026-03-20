@@ -1570,6 +1570,12 @@ socket.on('private-messages-loaded', (loadedMessages) => {
     messagesContainer.innerHTML = '';
     loadedMessages.forEach(msg => displayMessage(msg));
     
+    // Очищаем кэш входящих сообщений для этого пользователя
+    // (они уже загружены из БД, дубли не нужны)
+    if (currentChatUser) {
+        delete pendingMessages[currentChatUser];
+    }
+    
     // Отправляем событие что сообщения прочитаны
     loadedMessages.forEach(msg => {
         if (msg.from !== currentUsername && msg.readStatus < 2) {
@@ -1578,10 +1584,24 @@ socket.on('private-messages-loaded', (loadedMessages) => {
     });
 });
 
+// Кэш входящих приватных сообщений (для пользователей не в активном чате)
+const pendingMessages = {};
+
 socket.on('private-message', (data) => {
     if (data.from === currentChatUser || data.to === currentChatUser) {
+        // Пользователь сейчас в этом чате — показываем сразу
         displayMessage(data);
+        // Помечаем как прочитанное
+        if (data.from !== currentUsername) {
+            socket.emit('mark-as-read', { id: data.id });
+        }
     } else if (data.from !== currentUsername) {
+        // Кэшируем сообщение для последующего отображения
+        if (!pendingMessages[data.from]) {
+            pendingMessages[data.from] = [];
+        }
+        pendingMessages[data.from].push(data);
+
         if (!unreadMessages[data.from]) {
             unreadMessages[data.from] = 0;
         }
